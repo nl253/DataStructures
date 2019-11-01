@@ -1,20 +1,18 @@
 package stream
 
 import (
-	"time"
+	"fmt"
+	"strings"
+	"sync"
 
 	"github.com/nl253/DataStructures/list"
 )
 
-const (
-	BASE_W8_TM                      = 10 * time.Millisecond
-	W8_DELTA                        = 10 * time.Millisecond
-	W8_MAX_MULTIPLIER time.Duration = 100
-)
-
 type Stream struct {
 	closed bool
+	lk     *sync.Mutex
 	buf    *list.ConcurrentList
+	lks    *list.ConcurrentList
 }
 
 type streamEnd struct{}
@@ -22,49 +20,99 @@ type streamEnd struct{}
 var EndMarker = &streamEnd{}
 
 func New() *Stream {
-	return &Stream{buf: list.New(), closed: false}
+	return &Stream{
+		lk:     &sync.Mutex{},
+		buf:    list.New(),
+		lks:    list.New(),
+		closed: false,
+	}
 }
 
 func (s Stream) PushFront(t interface{}) {
+	s.lk.Lock()
 	s.buf.Prepend(t)
+	if !s.lks.Empty() {
+		s.lks.PopFront().(*sync.Mutex).Unlock()
+	}
+	s.lk.Unlock()
 }
 
 func (s Stream) PushBack(x interface{}) {
+	s.lk.Lock()
 	s.buf.Append(x)
+	if !s.lks.Empty() {
+		s.lks.PopFront().(*sync.Mutex).Unlock()
+	}
+	s.lk.Unlock()
 }
 
 func (s Stream) Pull() interface{} {
-	var waited time.Duration = 0
-	for s.buf.Empty() {
+	s.lk.Lock()
+	if s.buf.Empty() {
 		if s.closed {
+			s.lk.Unlock()
 			return EndMarker
-		} else {
-			if waited > W8_MAX_MULTIPLIER {
-				waited = W8_MAX_MULTIPLIER
-			}
-			time.Sleep(BASE_W8_TM + waited*W8_DELTA)
-			waited++
 		}
+		l := &sync.Mutex{}
+		l.Lock()
+		s.lks.Append(l)
+		s.lk.Unlock()
+		l.Lock()
+		l.Unlock()
+		s.lk.Lock()
 	}
-	return s.buf.PopFront()
+	front := s.buf.PopFront()
+	s.lk.Unlock()
+	return front
 }
 
 func (s Stream) Peek() interface{} {
-	var waited time.Duration = 0
-	for s.buf.Empty() {
+	s.lk.Lock()
+	if s.buf.Empty() {
 		if s.closed {
+			s.lk.Unlock()
 			return EndMarker
-		} else {
-			if waited > W8_MAX_MULTIPLIER {
-				waited = W8_MAX_MULTIPLIER
-			}
-			time.Sleep(BASE_W8_TM + waited*W8_DELTA)
-			waited++
 		}
+		l := &sync.Mutex{}
+		l.Lock()
+		s.lks.Append(l)
+		s.lk.Unlock()
+		l.Lock()
+		l.Unlock()
+		s.lk.Lock()
 	}
-	return s.buf.PeekFront()
+	front := s.buf.PeekFront()
+	s.lk.Unlock()
+	return front
 }
 
 func (s *Stream) Close() {
+	s.lk.Lock()
 	s.closed = true
+	s.lk.Unlock()
+}
+
+func (s *Stream) String() string {
+	s.lk.Lock()
+	lk := sync.RWMutex{}
+	xs := make([]string, s.buf.Size())
+	s.buf.ForEachParallel(func(i interface{}, u uint) {
+		lk.RLock()
+		if u >= uint(len(xs)) {
+			lk.RUnlock()
+			lk.Lock()
+			xs = append(xs, "")
+			lk.Unlock()
+		}
+		lk.RLock()
+		switch i.(type) {
+		case fmt.Stringer:
+			xs[u] = i.(fmt.Stringer).String()
+		default:
+			xs[u] = fmt.Sprintf("%v", i)
+		}
+		lk.RUnlock()
+	})
+	s.lk.Unlock()
+	return fmt.Sprintf("| %s |", strings.Join(xs, " < "))
 }
