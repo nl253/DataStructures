@@ -256,6 +256,9 @@ func (xs *ConcurrentList) Eq(_ys interface{}) bool {
 	switch _ys.(type) {
 	case *ConcurrentList:
 		ys := _ys.(*ConcurrentList)
+		if xs.Size() != ys.Size() {
+			return false
+		}
 		xs.lk.Lock()
 		defer xs.lk.Unlock()
 		focus := xs.fst
