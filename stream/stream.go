@@ -44,8 +44,11 @@ func (s *Stream) Filter(f func(x interface{}) bool) *Stream {
 	s.lk.Lock()
 	newS := New()
 	go func() {
-		for !s.closed {
+		for {
 			x := s.Pull()
+			if x == EndMarker {
+				break
+			}
 			if f(x) {
 				newS.PushBack(x)
 			}
@@ -60,8 +63,12 @@ func (s *Stream) Connect(other *Stream) *Stream {
 	s.lk.Lock()
 	other.lk.Lock()
 	go func() {
-		for !s.closed {
-			other.PushBack(s.Pull())
+		for {
+			x := s.Pull()
+			if x == EndMarker {
+				break
+			}
+			other.PushBack(x)
 		}
 		other.lk.Unlock()
 		other.Close()
@@ -142,6 +149,23 @@ func (s *Stream) Close() {
 		l.(*sync.Mutex).Unlock()
 	})
 	s.lk.Unlock()
+}
+
+func (s *Stream) Drain() *list.ConcurrentList {
+	xs := list.New()
+	for {
+		x := s.Pull()
+		if x == EndMarker {
+			return xs
+		}
+		xs.Append(x)
+	}
+}
+
+func (s *Stream) Skip(n uint) {
+	for i := uint(0); i < n; i++ {
+		s.Pull()
+	}
 }
 
 func (s *Stream) Eq(x interface{}) bool {
