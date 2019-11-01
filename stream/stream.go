@@ -19,60 +19,61 @@ type streamEnd struct{}
 
 var EndMarker = &streamEnd{}
 
-func New() *Stream {
-	return &Stream{
+func New(xs ...interface{}) *Stream {
+	s := &Stream{
 		lk:     &sync.Mutex{},
 		buf:    list.New(),
 		lks:    list.New(),
 		closed: false,
 	}
+	for _, x := range xs {
+		s.PushBack(x)
+	}
+	return s
 }
 
 func (s *Stream) Map(f func(x interface{}) interface{}) *Stream {
-	s.lk.Lock()
 	newS := New()
 	go func() {
-		for !s.closed {
-			newS.PushBack(f(s.Pull()))
+		for {
+			x := s.Pull()
+			if x == EndMarker {
+				newS.Close()
+				return
+			}
+			newS.PushBack(f(x))
 		}
-		s.lk.Unlock()
 	}()
 	return newS
 }
 
 func (s *Stream) Filter(f func(x interface{}) bool) *Stream {
-	s.lk.Lock()
 	newS := New()
 	go func() {
 		for {
 			x := s.Pull()
 			if x == EndMarker {
-				break
+				newS.Close()
+				return
 			}
 			if f(x) {
 				newS.PushBack(x)
 			}
 		}
-		newS.Close()
-		s.lk.Unlock()
 	}()
 	return newS
 }
 
 func (s *Stream) Connect(other *Stream) *Stream {
-	s.lk.Lock()
-	other.lk.Lock()
 	go func() {
 		for {
 			x := s.Pull()
 			if x == EndMarker {
-				break
+				other.Close()
+				return
 			}
 			other.PushBack(x)
 		}
-		other.lk.Unlock()
-		other.Close()
-		s.lk.Unlock()
 	}()
 	return other
 }
