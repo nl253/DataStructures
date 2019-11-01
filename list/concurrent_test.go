@@ -1,12 +1,36 @@
 package list
 
 import (
+	"sync"
 	"testing"
 
 	ut "github.com/nl253/Testing"
 )
 
 var fCon = ut.Test("ConcurrentList")
+
+func TestConcurrentList_Concurrency(t *testing.T) {
+	should := fCon("general concurrency", t)
+	should("not freeze the runtime", true, func() interface{} {
+		m := 100000
+		xs := Range(0, m)
+		locks := make([]*sync.Mutex, m, m)
+		for i := uint(0); i < xs.Size()-1; i++ {
+			locks[i] = &sync.Mutex{}
+			locks[i].Lock()
+			go func(i uint) uint {
+				defer locks[i].Unlock()
+				return i + 1
+			}(i)
+		}
+		for i := uint(0); i < xs.Size()-1; i++ {
+			l := locks[i]
+			l.Lock()
+			l.Unlock()
+		}
+		return true
+	})
+}
 
 func TestConcurrentList_MapParallelInPlace(t *testing.T) {
 	should := fCon("MapParallelInPlace", t)
