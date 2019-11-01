@@ -9,394 +9,271 @@ import (
 var fCon = ut.Test("ConcurrentList")
 
 func TestConcurrentList_MapParallelInPlace(t *testing.T) {
-	should := fCon("MapParallelInPlace")
-	should("apply func to each item and modify list in place")(ut.Case{
-		Expected: New(2, 3, 4),
-		F: func() interface{} {
-			xs := New(1, 2, 3)
-			xs.MapParallelInPlace(func(x interface{}, idx uint) interface{} {
-				return x.(int) + 1
-			})
-			return xs
-		},
-	})(t)
-	should("do nothing for empty lists")(ut.Case{
-		Expected: New(),
-		F: func() interface{} {
-			xs := New()
-			xs.MapParallelInPlace(func(x interface{}, idx uint) interface{} {
-				return x.(int) + 1
-			})
-			return xs
-		},
-	})(t)
+	should := fCon("MapParallelInPlace", t)
+	should("apply func to each item and modify list in place", New(2, 3, 4), func() interface{} {
+		xs := New(1, 2, 3)
+		xs.MapParallelInPlace(func(x interface{}, idx uint) interface{} {
+			return x.(int) + 1
+		})
+		return xs
+	})
+	should("do nothing for empty lists", New(), func() interface{} {
+		xs := New()
+		xs.MapParallelInPlace(func(x interface{}, idx uint) interface{} {
+			return x.(int) + 1
+		})
+		return xs
+	})
 }
 
 func TestConcurrentList_Append(t *testing.T) {
-	should := fCon("Append")
-	should("add item to back")(ut.Case{
-		Expected: true,
-		F: func() interface{} {
-			xs := New()
-			xs.Append(0)
-			return xs.Eq(New(0))
-		},
-	})(t)
-	should("add item to back")(ut.Case{
-		Expected: New(1, 0),
-		F: func() interface{} {
-			xs := New(1)
-			xs.Append(0)
-			return xs
-		},
-	})(t)
+	should := fCon("Append", t)
+	should("add item to back", true, func() interface{} {
+		xs := New()
+		xs.Append(0)
+		return xs.Eq(New(0))
+	})
+	should("add item to back", New(1, 0), func() interface{} {
+		xs := New(1)
+		xs.Append(0)
+		return xs
+	})
 }
 
 func TestConcurrentList_Prepend(t *testing.T) {
-	should := fCon("Prepend")
-	should("add item to front")(ut.Case{
-		Expected: New(0),
-		F: func() interface{} {
-			xs := New()
-			xs.Prepend(0)
-			return xs
-		},
-	})(t)
-	should("add item to front")(ut.Case{
-		Expected: New(0, 1),
-		F: func() interface{} {
-			xs := New(1)
-			xs.Prepend(0)
-			return xs
-		},
-	})(t)
+	should := fCon("Prepend", t)
+	should("add item to front", New(0), func() interface{} {
+		xs := New()
+		xs.Prepend(0)
+		return xs
+	})
+	should("add item to front", New(0, 1), func() interface{} {
+		xs := New(1)
+		xs.Prepend(0)
+		return xs
+	})
 }
 
 func TestConcurrentList_PopFront(t *testing.T) {
-	should := fCon("PopFront")
-	should("remove 0th item")(ut.Case{
-		Expected: New(),
-		F: func() interface{} {
-			xs := New(0)
-			xs.PopFront()
-			return xs
-		},
-	})(t)
+	should := fCon("PopFront", t)
+	should("remove 0th item", New(), func() interface{} {
+		xs := New(0)
+		xs.PopFront()
+		return xs
+	})
 }
 
 func TestConcurrentList_Range(t *testing.T) {
-	should := fCon("Range")
-	should("generate list of ints in bounds")(ut.Case{
-		Expected: New(0, 1),
-		F: func() interface{} {
-			return Range(0, 2)
-		},
-	})(t)
-	should("generate empty list for equal bounds")(ut.Case{
-		Expected: New(),
-		F: func() interface{} {
-			return Range(0, 0)
-		},
-	})(t)
+	should := fCon("Range", t)
+	should("generate list of ints in bounds", New(0, 1), func() interface{} {
+		return Range(0, 2)
+	})
+	should("generate empty list for equal bounds", New(), func() interface{} {
+		return Range(0, 0)
+	})
 }
 
 func TestConcurrentList_Generate(t *testing.T) {
-	should := fCon("Generate")
-	should("generate list of ints in bounds when using id fLookup")(ut.Case{
-		Expected: New(0, 1),
-		F: func() interface{} {
-			return Generate(0, 2, func(i int) interface{} {
-				return i
-			})
-		},
-	})(t)
-	should("generate empty list for equal bounds")(ut.Case{
-		Expected: New(),
-		F: func() interface{} {
-			return Generate(0, 0, func(i int) interface{} {
-				return i
-			})
-		},
-	})(t)
+	should := fCon("Generate", t)
+	should("generate list of ints in bounds when using id fLookup", New(0, 1), func() interface{} {
+		return Generate(0, 2, func(i int) interface{} {
+			return i
+		})
+	})
+	should("generate empty list for equal bounds", New(), func() interface{} {
+		return Generate(0, 0, func(i int) interface{} {
+			return i
+		})
+	})
 }
 
 func TestConcurrentList_Tail(t *testing.T) {
-	should := fCon("Tail")
-	should("return all but 0th elements")(ut.Case{
-		Expected: New(),
-		F: func() interface{} {
-			return New(0).Tail()
-		},
-	})(t)
+	should := fCon("Tail", t)
+	should("return all but 0th elements", New(), func() interface{} {
+		return New(0).Tail()
+	})
 }
 
 func TestConcurrentList_PeekFront(t *testing.T) {
-	should := fCon("PeekFront")
-	should("return 0th element")(ut.Case{
-		Expected: 0,
-		F: func() interface{} {
-			return New(0).PeekFront()
-		},
-	})(t)
+	should := fCon("PeekFront", t)
+	should("return 0th element", 0, func() interface{} {
+		return New(0).PeekFront()
+	})
 }
 
 func TestConcurrentList_PeekBack(t *testing.T) {
-	should := fCon("PeekBack")
-	should("return 0th element")(ut.Case{
-		Expected: 0,
-		F: func() interface{} {
-			return New(0).PeekBack()
-		},
-	})(t)
+	should := fCon("PeekBack", t)
+	should("return 0th element", 0, func() interface{} {
+		return New(0).PeekBack()
+
+	})
 }
 
 func TestConcurrentList_Empty(t *testing.T) {
-	should := fCon("Empty")
-	should("be true for empty list")(ut.Case{
-		Expected: true,
-		F: func() interface{} {
-			return New().Empty()
-		},
-	})(t)
-	should("be false for non-empty list")(ut.Case{
-		Expected: false,
-		F: func() interface{} {
-			return New(1).Empty()
-		},
-	})(t)
+	should := fCon("Empty", t)
+	should("be true for empty list", true, func() interface{} {
+		return New().Empty()
+	})
+	should("be false for non-empty list", false, func() interface{} {
+		return New(1).Empty()
+	})
 }
 
 func TestConcurrentList_Size(t *testing.T) {
-	should := fCon("Size")
-	should("be 0 for empty list")(ut.Case{
-		Expected: uint(0),
-		F: func() interface{} {
-			return New().Size()
-		},
-	})(t)
-	should("be 1 for list with 1 item")(ut.Case{
-		Expected: uint(1),
-		F: func() interface{} {
-			return New(1).Size()
-		},
-	})(t)
+	should := fCon("Size", t)
+	should("be 0 for empty list", uint(0), func() interface{} {
+		return New().Size()
+	})
+	should("be 1 for list with 1 item", uint(1), func() interface{} {
+		return New(1).Size()
+	})
 }
 
 func TestConcurrentList_String(t *testing.T) {
-	should := fCon("String")
-	should("be \"[]\" for empty list")(ut.Case{
-		Expected: "[]",
-		F: func() interface{} {
-			return New().String()
-		},
-	})(t)
-	should("be \"[1]\" for list with `1`")(ut.Case{
-		Expected: "[1]",
-		F: func() interface{} {
-			return New(1).String()
-		},
-	})(t)
+	should := fCon("String", t)
+	should("be \"[]\" for empty list", "[]", func() interface{} {
+		return New().String()
+	})
+	should("be \"[1]\" for list with `1`", "[1]", func() interface{} {
+		return New(1).String()
+	})
 }
 
 func TestConcurrentList_Clear(t *testing.T) {
-	should := fCon("Clear")
-	should("do nothing to empty list")(ut.Case{
-		Expected: New(),
-		F: func() interface{} {
-			xs := New()
-			xs.Clear()
-			return xs
-		},
-	})(t)
-	should("remove items from list and set size to 0")(ut.Case{
-		Expected: New(),
-		F: func() interface{} {
-			xs := New(1)
-			xs.Clear()
-			return xs
-		},
-	})(t)
+	should := fCon("Clear", t)
+	should("do nothing to empty list", New(), func() interface{} {
+		xs := New()
+		xs.Clear()
+		return xs
+	})
+	should("remove items from list and set size to 0", New(), func() interface{} {
+		xs := New(1)
+		xs.Clear()
+		return xs
+	})
 }
 
 func TestConcurrentList_Remove(t *testing.T) {
-	should := fCon("Remove")
-	should("do nothing to empty list (check idx)")(ut.Case{
-		Expected: New(),
-		F: func() interface{} {
-			xs := New()
-			xs.Remove(func(i interface{}, u uint) bool {
-				return u == 0
-			})
-			return xs
-		},
-	})(t)
-	should("do nothing to empty list (check val)")(ut.Case{
-		Expected: New(),
-		F: func() interface{} {
-			xs := New()
-			xs.Remove(func(i interface{}, u uint) bool {
-				return i == 1
-			})
-			return xs
-		},
-	})(t)
-	should("remove item from list and decrement size (check val)")(
-		ut.Case{
-			Expected: uint(0),
-			F: func() interface{} {
-				xs := New(1)
-				xs.Remove(func(i interface{}, u uint) bool {
-					return i.(int) == 1
-				})
-				return xs.Size()
-			},
-		})(t)
-	should("remove item from list and decrement size (check idx)")(ut.Case{
-		Expected: New(),
-		F: func() interface{} {
-			xs := New(1)
-			xs.Remove(func(i interface{}, u uint) bool {
-				return u == 0
-			})
-			return xs
-		},
-	})(t)
-	should("do nothing when item not in the list (check val)")(ut.Case{
-		Expected: New(1),
-		F: func() interface{} {
-			xs := New(1)
-			xs.Remove(func(i interface{}, u uint) bool {
-				return i.(int) == 2
-			})
-			return xs
-		},
-	})(t)
-	should("return removed item")(ut.Case{
-		Expected: 1,
-		F: func() interface{} {
-			xs := New(1)
-			x, _ := xs.Remove(func(i interface{}, u uint) bool {
-				return u == 0
-			})
-			return x
-		},
-	})(t)
-	should("return index of removed item")(ut.Case{
-		Expected: 0,
-		F: func() interface{} {
-			xs := New(1)
-			_, idx := xs.Remove(func(i interface{}, u uint) bool {
-				return i.(int) == 1
-			})
-			return idx
-		},
-	})(t)
+	should := fCon("Remove", t)
+	should("do nothing to empty list (check idx)", New(), func() interface{} {
+		xs := New()
+		xs.Remove(func(i interface{}, u uint) bool {
+			return u == 0
+		})
+		return xs
+	})
+	should("do nothing to empty list (check val)", New(), func() interface{} {
+		xs := New()
+		xs.Remove(func(i interface{}, u uint) bool {
+			return i == 1
+		})
+		return xs
+	})
+	should("remove item from list and decrement size (check val)", uint(0), func() interface{} {
+		xs := New(1)
+		xs.Remove(func(i interface{}, u uint) bool {
+			return i.(int) == 1
+		})
+		return xs.Size()
+	})
+	should("remove item from list and decrement size (check idx)", New(), func() interface{} {
+		xs := New(1)
+		xs.Remove(func(i interface{}, u uint) bool {
+			return u == 0
+		})
+		return xs
+	})
+	should("do nothing when item not in the list (check val)", New(1), func() interface{} {
+		xs := New(1)
+		xs.Remove(func(i interface{}, u uint) bool {
+			return i.(int) == 2
+		})
+		return xs
+	})
+	should("return removed item", 1, func() interface{} {
+		xs := New(1)
+		x, _ := xs.Remove(func(i interface{}, u uint) bool {
+			return u == 0
+		})
+		return x
+	})
+	should("return index of removed item", 0, func() interface{} {
+		xs := New(1)
+		_, idx := xs.Remove(func(i interface{}, u uint) bool {
+			return i.(int) == 1
+		})
+		return idx
+	})
 }
 
 func TestConcurrentList_Find(t *testing.T) {
-	should := fCon("Find")
-	should("return -1 as index when not found (check idx)")(ut.Case{
-		Expected: -1,
-		F: func() interface{} {
-			xs := New(1)
-			_, idx := xs.Find(func(i interface{}, u uint) bool {
-				return u == 1
-			})
-			return idx
-		},
-	})(t)
-	should("return -1 as index when not found (check val)")(ut.Case{
-		Expected: -1,
-		F: func() interface{} {
-			xs := New(1)
-			_, idx := xs.Find(func(i interface{}, u uint) bool {
-				return i.(int) == 2
-			})
-			return idx
-		},
-	})(t)
-	should("return -1 as index when empty (check idx)")(ut.Case{
-		Expected: -1,
-		F: func() interface{} {
-			xs := New()
-			_, idx := xs.Find(func(i interface{}, u uint) bool {
-				return u == 0
-			})
-			return idx
-		},
-	})(t)
-	should("return -1 as index when empty (check val)")(ut.Case{
-		Expected: -1,
-		F: func() interface{} {
-			xs := New()
-			_, idx := xs.Find(func(i interface{}, u uint) bool {
-				return i.(int) == 0
-			})
-			return idx
-		},
-	})(t)
-	should("return index when found (check val)")(ut.Case{
-		Expected: 0,
-		F: func() interface{} {
-			xs := New(1)
-			_, idx := xs.Find(func(i interface{}, u uint) bool {
-				return i.(int) == 1
-			})
-			return idx
-		},
-	})(t)
-	should("return index when found (check idx)")(ut.Case{
-		Expected: 0,
-		F: func() interface{} {
-			xs := New(1)
-			_, idx := xs.Find(func(i interface{}, u uint) bool {
-				return u == 0
-			})
-			return idx
-		},
-	})(t)
+	should := fCon("Find", t)
+	should("return -1 as index when not found (check idx)", -1, func() interface{} {
+		xs := New(1)
+		_, idx := xs.Find(func(i interface{}, u uint) bool {
+			return u == 1
+		})
+		return idx
+	})
+	should("return -1 as index when not found (check val)", -1, func() interface{} {
+		xs := New(1)
+		_, idx := xs.Find(func(i interface{}, u uint) bool {
+			return i.(int) == 2
+		})
+		return idx
+	})
+	should("return -1 as index when empty (check idx)", -1, func() interface{} {
+		xs := New()
+		_, idx := xs.Find(func(i interface{}, u uint) bool {
+			return u == 0
+		})
+		return idx
+	})
+	should("return -1 as index when empty (check val)", -1, func() interface{} {
+		xs := New()
+		_, idx := xs.Find(func(i interface{}, u uint) bool {
+			return i.(int) == 0
+		})
+		return idx
+	})
+	should("return index when found (check val)", 0, func() interface{} {
+		xs := New(1)
+		_, idx := xs.Find(func(i interface{}, u uint) bool {
+			return i.(int) == 1
+		})
+		return idx
+	})
+	should("return index when found (check idx)", 0, func() interface{} {
+		xs := New(1)
+		_, idx := xs.Find(func(i interface{}, u uint) bool {
+			return u == 0
+		})
+		return idx
+	})
 }
 
 func TestConcurrentList_Nth(t *testing.T) {
-	should := fCon("Nth")
-	should("return val")(ut.Case{
-		Expected: 1,
-		F: func() interface{} {
-			return New(1).Nth(0)
-		},
-	})(t)
+	should := fCon("Nth", t)
+	should("return val", 1, func() interface{} {
+		return New(1).Nth(0)
+	})
 }
 
 func TestConcurrentList_Eq(t *testing.T) {
-	should := fCon("Eq")
-	should("be true if both empty")(ut.Case{
-		Expected: true,
-		F: func() interface{} {
-			return New().Eq(New())
-		},
-	})(t)
-	should("be false if only one is empty")(ut.Case{
-		Expected: false,
-		F: func() interface{} {
-			return New(1).Eq(New())
-		},
-	})(t)
-	should("be false if only one is empty")(ut.Case{
-		Expected: false,
-		F: func() interface{} {
-			return New().Eq(New(1))
-		},
-	})(t)
-	should("be true if every el is equal")(ut.Case{
-		Expected: true,
-		F: func() interface{} {
-			return New(1).Eq(New(1))
-		},
-	})(t)
-	should("be not true if every el is not equal")(ut.Case{
-		Expected: false,
-		F: func() interface{} {
-			return New(2).Eq(New(1))
-		},
-	})(t)
+	should := fCon("Eq", t)
+	should("be true if both empty", true, func() interface{} {
+		return New().Eq(New())
+	})
+	should("be false if only one is empty", false, func() interface{} {
+		return New(1).Eq(New())
+	})
+	should("be false if only one is empty", false, func() interface{} {
+		return New().Eq(New(1))
+	})
+	should("be true if every el is equal", true, func() interface{} {
+		return New(1).Eq(New(1))
+	})
+	should("be not true if every el is not equal", false, func() interface{} {
+		return New(2).Eq(New(1))
+	})
 }
