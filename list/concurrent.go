@@ -18,7 +18,7 @@ type (
 		fst  *node
 		lst  *node
 		size uint
-		lk   *sync.Mutex
+		lk   *sync.RWMutex
 	}
 )
 
@@ -27,7 +27,7 @@ func New(xs ...interface{}) *ConcurrentList {
 		fst:  nil,
 		lst:  nil,
 		size: 0,
-		lk:   &sync.Mutex{},
+		lk:   &sync.RWMutex{},
 	}
 	for _, x := range xs {
 		newList.Append(x)
@@ -55,13 +55,13 @@ func (xs *ConcurrentList) Tail() *ConcurrentList {
 	if xs.Size() == 1 {
 		return New()
 	}
-	xs.lk.Lock()
-	defer xs.lk.Unlock()
+	xs.lk.RLock()
+	defer xs.lk.RUnlock()
 	return &ConcurrentList{
 		fst:  xs.fst.next,
 		lst:  xs.lst,
 		size: xs.size - 1,
-		lk:   &sync.Mutex{},
+		lk:   &sync.RWMutex{},
 	}
 }
 
@@ -93,14 +93,10 @@ func (xs *ConcurrentList) Prepend(val interface{}) {
 }
 
 func (xs *ConcurrentList) PeekFront() interface{} {
-	xs.lk.Lock()
-	defer xs.lk.Unlock()
 	return xs.fst.val
 }
 
 func (xs *ConcurrentList) PeekBack() interface{} {
-	xs.lk.Lock()
-	defer xs.lk.Unlock()
 	return xs.lst.val
 }
 
@@ -143,8 +139,8 @@ func (xs *ConcurrentList) Remove(pred func(interface{}, uint) bool) (interface{}
 
 func (xs *ConcurrentList) Find(pred func(interface{}, uint) bool) (interface{}, int) {
 	idx := uint(0)
-	xs.lk.Lock()
-	defer xs.lk.Unlock()
+	xs.lk.RLock()
+	defer xs.lk.RUnlock()
 	for focus := xs.fst; focus != nil; focus = focus.next {
 		if pred(focus.val, idx) {
 			return focus.val, int(idx)
@@ -155,7 +151,7 @@ func (xs *ConcurrentList) Find(pred func(interface{}, uint) bool) (interface{}, 
 }
 
 func (xs *ConcurrentList) ForEachParallel(f func(interface{}, uint)) {
-	xs.lk.Lock()
+	xs.lk.RLock()
 	var idx uint32 = 0
 	jobs := make([]*sync.Mutex, xs.size, xs.size)
 	max := N_WORKERS
@@ -175,7 +171,7 @@ func (xs *ConcurrentList) ForEachParallel(f func(interface{}, uint)) {
 		}(focus.val, idx)
 		idx++
 	}
-	xs.lk.Unlock()
+	xs.lk.RUnlock()
 	for i := uint(0); i < xs.size; i++ {
 		jobs[i].Lock()
 		jobs[i].Unlock()
@@ -214,8 +210,8 @@ func (xs *ConcurrentList) Nth(n uint) interface{} {
 	if n == 0 {
 		return xs.PeekFront()
 	}
-	xs.lk.Lock()
-	defer xs.lk.Unlock()
+	xs.lk.RLock()
+	defer xs.lk.RUnlock()
 	focus := xs.fst.next
 	for idx := uint(1); idx < n; idx++ {
 		focus = focus.next
@@ -236,15 +232,13 @@ func (xs *ConcurrentList) Empty() bool {
 }
 
 func (xs *ConcurrentList) Size() uint {
-	xs.lk.Lock()
-	defer xs.lk.Unlock()
 	return xs.size
 }
 
 func (xs *ConcurrentList) Reduce(init interface{}, f func(x interface{}, y interface{}, idx uint) interface{}) interface{} {
 	var idx uint = 0
-	xs.lk.Lock()
-	defer xs.lk.Unlock()
+	xs.lk.RLock()
+	defer xs.lk.RUnlock()
 	for focus := xs.fst; focus != nil; focus = focus.next {
 		init = f(init, focus.val, idx)
 		idx++
@@ -259,8 +253,8 @@ func (xs *ConcurrentList) Eq(_ys interface{}) bool {
 		if xs.Size() != ys.Size() {
 			return false
 		}
-		xs.lk.Lock()
-		defer xs.lk.Unlock()
+		xs.lk.RLock()
+		defer xs.lk.RUnlock()
 		focus := xs.fst
 		focus2 := ys.fst
 		for {

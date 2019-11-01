@@ -13,7 +13,7 @@ type (
 		fst  *node
 		lst  *node
 		size uint
-		lk   *sync.Mutex
+		lk   *sync.RWMutex
 	}
 )
 
@@ -22,7 +22,7 @@ func NewLookup(xs ...interface{}) *LookupList {
 		fst:  nil,
 		lst:  nil,
 		size: 0,
-		lk:   &sync.Mutex{},
+		lk:   &sync.RWMutex{},
 	}
 	for _, x := range xs {
 		newList.Append(x)
@@ -50,13 +50,13 @@ func (xs *LookupList) Tail() *LookupList {
 	if xs.Size() == 1 {
 		return NewLookup()
 	}
-	xs.lk.Lock()
-	defer xs.lk.Unlock()
+	xs.lk.RLock()
+	defer xs.lk.RUnlock()
 	return &LookupList{
 		fst:  xs.fst.next,
 		lst:  xs.lst,
 		size: xs.size - 1,
-		lk:   &sync.Mutex{},
+		lk:   &sync.RWMutex{},
 	}
 }
 
@@ -88,14 +88,10 @@ func (xs *LookupList) Prepend(val interface{}) {
 }
 
 func (xs *LookupList) PeekFront() interface{} {
-	xs.lk.Lock()
-	defer xs.lk.Unlock()
 	return xs.fst.val
 }
 
 func (xs *LookupList) PeekBack() interface{} {
-	xs.lk.Lock()
-	defer xs.lk.Unlock()
 	return xs.lst.val
 }
 
@@ -114,23 +110,23 @@ func (xs *LookupList) PopFront() interface{} {
 func (xs *LookupList) Find(pred func(interface{}, uint) bool) (interface{}, bool) {
 	idx := uint(0)
 	var parent *node = nil
-	xs.lk.Lock()
+	xs.lk.RLock()
 	for focus := xs.fst; focus != nil; focus = focus.next {
 		if pred(focus.val, idx) {
 			if parent != nil {
 				parent.next = focus.next
 				xs.size--
-				xs.lk.Unlock()
+				xs.lk.RUnlock()
 				xs.Prepend(focus.val)
 				return focus.val, true
 			}
-			xs.lk.Unlock()
+			xs.lk.RUnlock()
 			return focus.val, true
 		}
 		idx++
 		parent = focus
 	}
-	xs.lk.Unlock()
+	xs.lk.RUnlock()
 	return nil, false
 }
 
@@ -159,7 +155,7 @@ func (xs *LookupList) Remove(pred func(interface{}, uint) bool) (interface{}, in
 }
 
 func (xs *LookupList) ForEachParallel(f func(interface{}, uint)) {
-	xs.lk.Lock()
+	xs.lk.RLock()
 	var idx uint32 = 0
 	jobs := make([]*sync.Mutex, xs.size, xs.size)
 	max := N_WORKERS
@@ -179,7 +175,7 @@ func (xs *LookupList) ForEachParallel(f func(interface{}, uint)) {
 		}(focus.val, idx)
 		idx++
 	}
-	xs.lk.Unlock()
+	xs.lk.RUnlock()
 	for i := uint(0); i < xs.size; i++ {
 		jobs[i].Lock()
 		jobs[i].Unlock()
@@ -218,8 +214,8 @@ func (xs *LookupList) Nth(n uint) interface{} {
 	if n == 0 {
 		return xs.PeekFront()
 	}
-	xs.lk.Lock()
-	defer xs.lk.Unlock()
+	xs.lk.RLock()
+	defer xs.lk.RUnlock()
 	focus := xs.fst.next
 	for idx := uint(1); idx < n; idx++ {
 		focus = focus.next
@@ -240,8 +236,6 @@ func (xs *LookupList) Empty() bool {
 }
 
 func (xs *LookupList) Size() uint {
-	xs.lk.Lock()
-	defer xs.lk.Unlock()
 	return xs.size
 }
 
