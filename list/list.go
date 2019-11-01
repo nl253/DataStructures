@@ -124,11 +124,13 @@ func (xs *ConcurrentList) Remove(pred func(interface{}, uint) bool) (interface{}
 	for focus := xs.fst; focus != nil; focus = focus.next {
 		if pred(focus.val, idx) {
 			if parent == nil {
+				xs.size--
 				xs.fst = xs.fst.next
 				if xs.fst == nil {
 					xs.lst = nil
 				}
 			} else {
+				xs.size--
 				parent.next = focus.next
 			}
 			return focus.val, int(idx)
@@ -237,6 +239,53 @@ func (xs *ConcurrentList) Size() uint {
 	xs.lk.Lock()
 	defer xs.lk.Unlock()
 	return xs.size
+}
+
+func (xs *ConcurrentList) Reduce(init interface{}, f func(x interface{}, y interface{}, idx uint) interface{}) interface{} {
+	var idx uint = 0
+	xs.lk.Lock()
+	defer xs.lk.Unlock()
+	for focus := xs.fst; focus != nil; focus = focus.next {
+		init = f(init, focus.val, idx)
+		idx++
+	}
+	return init
+}
+
+func (xs *ConcurrentList) Eq(_ys interface{}) bool {
+	switch _ys.(type) {
+	case *ConcurrentList:
+		ys := _ys.(*ConcurrentList)
+		xs.lk.Lock()
+		defer xs.lk.Unlock()
+		focus := xs.fst
+		focus2 := ys.fst
+		for {
+			if focus == nil {
+				if focus2 == nil {
+					break
+				}
+				return false
+			}
+
+			if focus2 == nil {
+				if focus == nil {
+					break
+				}
+				return false
+			}
+
+			if focus.val != focus2.val {
+				return false
+			}
+
+			focus = focus.next
+			focus2 = focus2.next
+		}
+		return true
+	default:
+		return false
+	}
 }
 
 func (xs *ConcurrentList) String() string {

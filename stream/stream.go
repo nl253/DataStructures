@@ -3,7 +3,7 @@ package stream
 import (
 	"time"
 
-    "github.com/nl253/DataStructures/list"
+	"github.com/nl253/DataStructures/list"
 )
 
 const (
