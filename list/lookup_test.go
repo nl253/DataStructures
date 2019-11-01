@@ -358,6 +358,26 @@ func TestLookupList_Find(t *testing.T) {
 			return idx
 		},
 	})(t)
+	should("reorder when found (check val)")(ut.Case{
+		Expected: true,
+		F: func() interface{} {
+			xs := NewLookup(0, 1)
+			xs.Find(func(i interface{}, u uint) bool {
+				return i.(int) == 1
+			})
+			return xs.Eq(NewLookup(1, 0))
+		},
+	})(t)
+	should("reorder when found (check idx)")(ut.Case{
+		Expected: true,
+		F: func() interface{} {
+			xs := NewLookup(0, 1)
+			xs.Find(func(i interface{}, u uint) bool {
+				return u == 1
+			})
+			return xs.Eq(NewLookup(1, 0))
+		},
+	})(t)
 }
 
 func TestLookupList_Nth(t *testing.T) {
