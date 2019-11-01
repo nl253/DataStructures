@@ -11,23 +11,23 @@ var fLookup = ut.Mod("LookupList")
 func TestLookupList_MapParallelInPlace(t *testing.T) {
 	should := fLookup("MapParallelInPlace")
 	should("apply func to each item and modify list in place")(ut.Case{
-		Expected: true,
+		Expected: NewLookup(2, 3, 4),
 		F: func() interface{} {
 			xs := NewLookup(1, 2, 3)
 			xs.MapParallelInPlace(func(x interface{}, idx uint) interface{} {
 				return x.(int) + 1
 			})
-			return xs.Eq(NewLookup(2, 3, 4))
+			return xs
 		},
 	})(t)
 	should("do nothing for empty lists")(ut.Case{
-		Expected: true,
+		Expected: NewLookup(),
 		F: func() interface{} {
 			xs := NewLookup()
 			xs.MapParallelInPlace(func(x interface{}, idx uint) interface{} {
 				return x.(int) + 1
 			})
-			return xs.Empty()
+			return xs
 		},
 	})(t)
 }
@@ -35,19 +35,19 @@ func TestLookupList_MapParallelInPlace(t *testing.T) {
 func TestLookupList_Append(t *testing.T) {
 	should := fLookup("Append")
 	should("add item to back")(ut.Case{
-		Expected: true,
+		Expected: NewLookup(0),
 		F: func() interface{} {
 			xs := NewLookup()
 			xs.Append(0)
-			return xs.Eq(NewLookup(0))
+			return xs
 		},
 	})(t)
 	should("add item to back")(ut.Case{
-		Expected: true,
+		Expected: NewLookup(1, 0),
 		F: func() interface{} {
 			xs := NewLookup(1)
 			xs.Append(0)
-			return xs.Eq(NewLookup(1, 0))
+			return xs
 		},
 	})(t)
 }
@@ -55,19 +55,19 @@ func TestLookupList_Append(t *testing.T) {
 func TestLookupList_Prepend(t *testing.T) {
 	should := fLookup("Prepend")
 	should("add item to front")(ut.Case{
-		Expected: true,
+		Expected: NewLookup(0),
 		F: func() interface{} {
 			xs := NewLookup()
 			xs.Prepend(0)
-			return xs.Eq(NewLookup(0))
+			return xs
 		},
 	})(t)
 	should("add item to front")(ut.Case{
-		Expected: true,
+		Expected: NewLookup(0, 1),
 		F: func() interface{} {
 			xs := NewLookup(1)
 			xs.Prepend(0)
-			return xs.Eq(NewLookup(0, 1))
+			return xs
 		},
 	})(t)
 }
@@ -75,11 +75,11 @@ func TestLookupList_Prepend(t *testing.T) {
 func TestLookupList_PopFront(t *testing.T) {
 	should := fLookup("PopFront")
 	should("remove 0th item")(ut.Case{
-		Expected: true,
+		Expected: NewLookup(),
 		F: func() interface{} {
 			xs := NewLookup(0)
 			xs.PopFront()
-			return xs.Eq(NewLookup())
+			return xs
 		},
 	})(t)
 }
@@ -87,15 +87,15 @@ func TestLookupList_PopFront(t *testing.T) {
 func TestLookupList_RangeLookup(t *testing.T) {
 	should := fLookup("RangeLookup")
 	should("generateLookup list of ints in bounds")(ut.Case{
-		Expected: true,
+		Expected: NewLookup(0, 1),
 		F: func() interface{} {
-			return RangeLookup(0, 2).Eq(NewLookup(0, 1))
+			return RangeLookup(0, 2)
 		},
 	})(t)
 	should("generateLookup empty list for equal bounds")(ut.Case{
-		Expected: true,
+		Expected: NewLookup(),
 		F: func() interface{} {
-			return RangeLookup(0, 0).Eq(NewLookup())
+			return RangeLookup(0, 0)
 		},
 	})(t)
 }
@@ -103,19 +103,19 @@ func TestLookupList_RangeLookup(t *testing.T) {
 func TestLookupList_GenerateLookup(t *testing.T) {
 	should := fLookup("GenerateLookup")
 	should("generateLookup list of ints in bounds when using id fLookup")(ut.Case{
-		Expected: true,
+		Expected: NewLookup(0, 1),
 		F: func() interface{} {
 			return GenerateLookup(0, 2, func(i int) interface{} {
 				return i
-			}).Eq(NewLookup(0, 1))
+			})
 		},
 	})(t)
 	should("generateLookup empty list for equal bounds")(ut.Case{
-		Expected: true,
+		Expected: NewLookup(),
 		F: func() interface{} {
 			return GenerateLookup(0, 0, func(i int) interface{} {
 				return i
-			}).Eq(NewLookup())
+			})
 		},
 	})(t)
 }
@@ -123,9 +123,9 @@ func TestLookupList_GenerateLookup(t *testing.T) {
 func TestLookupList_Tail(t *testing.T) {
 	should := fLookup("Tail")
 	should("return all but 0th elements")(ut.Case{
-		Expected: true,
+		Expected: NewLookup(),
 		F: func() interface{} {
-			return NewLookup(0).Tail().Eq(NewLookup())
+			return NewLookup(0).Tail()
 		},
 	})(t)
 }
@@ -201,23 +201,19 @@ func TestLookupList_String(t *testing.T) {
 func TestLookupList_Clear(t *testing.T) {
 	should := fLookup("Clear")
 	should("do nothing to empty list")(ut.Case{
-		Expected: true,
+		Expected: NewLookup(),
 		F: func() interface{} {
 			xs := NewLookup()
-			sizeAtT1 := xs.Size()
 			xs.Clear()
-			sizeAtT2 := xs.Size()
-			return sizeAtT1 == sizeAtT2
+			return xs
 		},
 	})(t)
 	should("remove items from list and set size to 0")(ut.Case{
-		Expected: true,
+		Expected: NewLookup(),
 		F: func() interface{} {
 			xs := NewLookup(1)
-			sizeAtT1 := xs.Size()
 			xs.Clear()
-			sizeAtT2 := xs.Size()
-			return sizeAtT1 != sizeAtT2 && sizeAtT2 == uint(0) && xs.Empty()
+			return xs
 		},
 	})(t)
 }
@@ -225,53 +221,53 @@ func TestLookupList_Clear(t *testing.T) {
 func TestLookupList_Remove(t *testing.T) {
 	should := fLookup("Remove")
 	should("do nothing to empty list (check idx)")(ut.Case{
-		Expected: uint(0),
+		Expected: NewLookup(),
 		F: func() interface{} {
 			xs := NewLookup()
 			xs.Remove(func(i interface{}, u uint) bool {
 				return u == 0
 			})
-			return xs.Size()
+			return xs
 		},
 	})(t)
 	should("do nothing to empty list (check val)")(ut.Case{
-		Expected: uint(0),
+		Expected: NewLookup(),
 		F: func() interface{} {
 			xs := NewLookup()
 			xs.Remove(func(i interface{}, u uint) bool {
 				return i == 1
 			})
-			return xs.Size()
+			return xs
 		},
 	})(t)
 	should("remove item from list and decrement size (check val)")(ut.Case{
-		Expected: uint(0),
+		Expected: NewLookup(),
 		F: func() interface{} {
 			xs := NewLookup(1)
 			xs.Remove(func(i interface{}, u uint) bool {
 				return i.(int) == 1
 			})
-			return xs.Size()
+			return xs
 		},
 	})(t)
 	should("remove item from list and decrement size (check idx)")(ut.Case{
-		Expected: uint(0),
+		Expected: NewLookup(),
 		F: func() interface{} {
 			xs := NewLookup(1)
 			xs.Remove(func(i interface{}, u uint) bool {
 				return u == 0
 			})
-			return xs.Size()
+			return xs
 		},
 	})(t)
 	should("do nothing when item not in the list (check val)")(ut.Case{
-		Expected: uint(1),
+		Expected: NewLookup(1),
 		F: func() interface{} {
 			xs := NewLookup(1)
 			xs.Remove(func(i interface{}, u uint) bool {
 				return i.(int) == 2
 			})
-			return xs.Size()
+			return xs
 		},
 	})(t)
 	should("return removed item")(ut.Case{
@@ -369,13 +365,13 @@ func TestLookupList_Find(t *testing.T) {
 		},
 	})(t)
 	should("reorder when found (check idx)")(ut.Case{
-		Expected: true,
+		Expected: NewLookup(1, 0),
 		F: func() interface{} {
 			xs := NewLookup(0, 1)
 			xs.Find(func(i interface{}, u uint) bool {
 				return u == 1
 			})
-			return xs.Eq(NewLookup(1, 0))
+			return xs
 		},
 	})(t)
 }
