@@ -3,7 +3,7 @@ package stream
 import (
 	"time"
 
-	"Lisp-GO/datastructures/list"
+    "github.com/nl253/DataStructures/list"
 )
 
 const (
