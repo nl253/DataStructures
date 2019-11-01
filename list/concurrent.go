@@ -93,11 +93,17 @@ func (xs *ConcurrentList) Prepend(val interface{}) {
 }
 
 func (xs *ConcurrentList) PeekFront() interface{} {
-	return xs.fst.val
+	xs.lk.RLock()
+	front := xs.fst.val
+	xs.lk.RUnlock()
+	return front
 }
 
 func (xs *ConcurrentList) PeekBack() interface{} {
-	return xs.lst.val
+	xs.lk.RLock()
+	back := xs.lst.val
+	xs.lk.RUnlock()
+	return back
 }
 
 func (xs *ConcurrentList) PopFront() interface{} {
@@ -228,11 +234,17 @@ func (xs *ConcurrentList) Clear() {
 }
 
 func (xs *ConcurrentList) Empty() bool {
-	return xs.Size() == 0
+	xs.lk.RLock()
+	empty := xs.size == 0
+	xs.lk.RUnlock()
+	return empty
 }
 
 func (xs *ConcurrentList) Size() uint {
-	return xs.size
+	xs.lk.RLock()
+	size := xs.size
+	xs.lk.RUnlock()
+	return size
 }
 
 func (xs *ConcurrentList) Reduce(init interface{}, f func(x interface{}, y interface{}, idx uint) interface{}) interface{} {
@@ -283,15 +295,25 @@ func (xs *ConcurrentList) Eq(_ys interface{}) bool {
 }
 
 func (xs *ConcurrentList) String() string {
+	lk := sync.RWMutex{}
 	n := xs.Size()
-	s := make([]string, n, n)
+	s := make([]string, n)
 	xs.ForEachParallel(func(x interface{}, idx uint) {
+		lk.RLock()
+		if idx >= uint(len(s)) {
+			lk.RUnlock()
+			lk.Lock()
+			s = append(s, "")
+			lk.Unlock()
+			lk.RLock()
+		}
 		switch x.(type) {
 		case fmt.Stringer:
 			s[idx] = x.(fmt.Stringer).String()
 		default:
 			s[idx] = fmt.Sprintf("%v", x)
 		}
+		lk.RUnlock()
 	})
 	return fmt.Sprintf("[%s]", strings.Join(s, " "))
 }
