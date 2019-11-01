@@ -81,6 +81,22 @@ func (s *Stream) Throttle(d time.Duration) *Stream {
 	return newS
 }
 
+func (s *Stream) Delay(d time.Duration) *Stream {
+	newS := New()
+	go func() {
+		time.Sleep(d)
+		for {
+			x := s.Pull()
+			if x == EndMarker {
+				newS.Close()
+				return
+			}
+			newS.PushBack(x)
+		}
+	}()
+	return newS
+}
+
 func (s *Stream) Broadcast(fst *Stream, ss ...*Stream) {
 	go func() {
 		for {
