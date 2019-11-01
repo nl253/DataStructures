@@ -262,3 +262,39 @@ func (xs *LookupList) String() string {
 	})
 	return fmt.Sprintf("[%s]", strings.Join(s, " "))
 }
+
+func (xs *LookupList) Eq(_ys interface{}) bool {
+	switch _ys.(type) {
+	case *LookupList:
+		ys := _ys.(*LookupList)
+		xs.lk.Lock()
+		defer xs.lk.Unlock()
+		focus := xs.fst
+		focus2 := ys.fst
+		for {
+			if focus == nil {
+				if focus2 == nil {
+					break
+				}
+				return false
+			}
+
+			if focus2 == nil {
+				if focus == nil {
+					break
+				}
+				return false
+			}
+
+			if focus.val != focus2.val {
+				return false
+			}
+
+			focus = focus.next
+			focus2 = focus2.next
+		}
+		return true
+	default:
+		return false
+	}
+}
