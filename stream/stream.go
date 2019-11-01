@@ -32,18 +32,24 @@ func (s Stream) PushFront(t interface{}) {
 	s.lk.Lock()
 	s.buf.Prepend(t)
 	if !s.lks.Empty() {
-		s.lks.PopFront().(*sync.Mutex).Unlock()
+		l := s.lks.PopFront()
+		s.lk.Unlock()
+		l.(*sync.Mutex).Unlock()
+	} else {
+		s.lk.Unlock()
 	}
-	s.lk.Unlock()
 }
 
 func (s Stream) PushBack(x interface{}) {
 	s.lk.Lock()
 	s.buf.Append(x)
 	if !s.lks.Empty() {
-		s.lks.PopFront().(*sync.Mutex).Unlock()
+		l := s.lks.PopFront()
+		s.lk.Unlock()
+		l.(*sync.Mutex).Unlock()
+	} else {
+		s.lk.Unlock()
 	}
-	s.lk.Unlock()
 }
 
 func (s Stream) Pull() interface{} {
@@ -98,13 +104,13 @@ func (s *Stream) String() string {
 	xs := make([]string, s.buf.Size())
 	s.buf.ForEachParallel(func(i interface{}, u uint) {
 		lk.RLock()
-		if u >= uint(len(xs)) {
+		for u >= uint(len(xs)) {
 			lk.RUnlock()
 			lk.Lock()
 			xs = append(xs, "")
 			lk.Unlock()
+			lk.RLock()
 		}
-		lk.RLock()
 		switch i.(type) {
 		case fmt.Stringer:
 			xs[u] = i.(fmt.Stringer).String()
