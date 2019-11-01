@@ -267,6 +267,9 @@ func (xs *LookupList) Eq(_ys interface{}) bool {
 	switch _ys.(type) {
 	case *LookupList:
 		ys := _ys.(*LookupList)
+		if xs.Size() != ys.Size() {
+			return false
+		}
 		xs.lk.Lock()
 		defer xs.lk.Unlock()
 		focus := xs.fst
