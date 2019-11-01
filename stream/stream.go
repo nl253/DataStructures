@@ -70,7 +70,7 @@ func (s *Stream) Connect(other *Stream) *Stream {
 	return other
 }
 
-func (s Stream) PushFront(t interface{}) {
+func (s *Stream) PushFront(t interface{}) {
 	s.lk.Lock()
 	s.buf.Prepend(t)
 	if !s.lks.Empty() {
@@ -82,7 +82,7 @@ func (s Stream) PushFront(t interface{}) {
 	}
 }
 
-func (s Stream) PushBack(x interface{}) {
+func (s *Stream) PushBack(x interface{}) {
 	s.lk.Lock()
 	s.buf.Append(x)
 	if !s.lks.Empty() {
@@ -94,7 +94,7 @@ func (s Stream) PushBack(x interface{}) {
 	}
 }
 
-func (s Stream) Pull() interface{} {
+func (s *Stream) Pull() interface{} {
 	s.lk.Lock()
 	if s.buf.Empty() {
 		if s.closed {
@@ -114,7 +114,7 @@ func (s Stream) Pull() interface{} {
 	return front
 }
 
-func (s Stream) Peek() interface{} {
+func (s *Stream) Peek() interface{} {
 	s.lk.Lock()
 	if s.buf.Empty() {
 		if s.closed {
