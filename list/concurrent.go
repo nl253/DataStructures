@@ -216,8 +216,8 @@ func (xs *ConcurrentList) Nth(n uint) interface{} {
 	}
 	xs.lk.Lock()
 	defer xs.lk.Unlock()
-	focus := xs.fst
-	for idx := uint(0); idx < n; idx++ {
+	focus := xs.fst.next
+	for idx := uint(1); idx < n; idx++ {
 		focus = focus.next
 	}
 	return focus.val
@@ -272,9 +272,6 @@ func (xs *ConcurrentList) Eq(_ys interface{}) bool {
 			}
 
 			if focus2 == nil {
-				if focus == nil {
-					break
-				}
 				return false
 			}
 

@@ -219,16 +219,12 @@ func (xs *LookupList) Nth(n uint) interface{} {
 		return xs.PeekFront()
 	}
 	xs.lk.Lock()
-	element := xs.fst
-	var parent *node
-	for idx := uint(0); idx < n; idx++ {
-		parent = element
-		element = element.next
+	defer xs.lk.Unlock()
+	focus := xs.fst.next
+	for idx := uint(1); idx < n; idx++ {
+		focus = focus.next
 	}
-	parent.next = element.next
-	xs.lk.Unlock()
-	xs.Prepend(element.val)
-	return element.val
+	return focus.val
 }
 
 func (xs *LookupList) Clear() {
@@ -283,9 +279,6 @@ func (xs *LookupList) Eq(_ys interface{}) bool {
 			}
 
 			if focus2 == nil {
-				if focus == nil {
-					break
-				}
 				return false
 			}
 
