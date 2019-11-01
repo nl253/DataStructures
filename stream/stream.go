@@ -28,6 +28,48 @@ func New() *Stream {
 	}
 }
 
+func (s *Stream) Map(f func(x interface{}) interface{}) *Stream {
+	s.lk.Lock()
+	newS := New()
+	go func() {
+		for !s.closed {
+			newS.PushBack(f(s.Pull()))
+		}
+		s.lk.Unlock()
+	}()
+	return newS
+}
+
+func (s *Stream) Filter(f func(x interface{}) bool) *Stream {
+	s.lk.Lock()
+	newS := New()
+	go func() {
+		for !s.closed {
+			x := s.Pull()
+			if f(x) {
+				newS.PushBack(x)
+			}
+		}
+		newS.Close()
+		s.lk.Unlock()
+	}()
+	return newS
+}
+
+func (s *Stream) Connect(other *Stream) *Stream {
+	s.lk.Lock()
+	other.lk.Lock()
+	go func() {
+		for !s.closed {
+			other.PushBack(s.Pull())
+		}
+		other.lk.Unlock()
+		other.Close()
+		s.lk.Unlock()
+	}()
+	return other
+}
+
 func (s Stream) PushFront(t interface{}) {
 	s.lk.Lock()
 	s.buf.Prepend(t)
@@ -95,7 +137,20 @@ func (s Stream) Peek() interface{} {
 func (s *Stream) Close() {
 	s.lk.Lock()
 	s.closed = true
+	s.lks.ForEachParallel(func(l interface{}, u uint) {
+		s.PushBack(EndMarker)
+		l.(*sync.Mutex).Unlock()
+	})
 	s.lk.Unlock()
+}
+
+func (s *Stream) Eq(x interface{}) bool {
+	switch x.(type) {
+	case *Stream:
+		return s == x.(*Stream)
+	default:
+		return false
+	}
 }
 
 func (s *Stream) String() string {
