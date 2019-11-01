@@ -2,7 +2,6 @@ package stream
 
 import (
 	"fmt"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -271,7 +270,6 @@ func (s *Stream) Close() {
 	s.lk.Lock()
 	s.closed = true
 	s.lk.Unlock()
-	runtime.Gosched()
 	s.lks.ForEachParallel(func(l interface{}, _ uint) {
 		s.PushBack(EndMarker)
 	})

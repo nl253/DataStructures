@@ -161,8 +161,8 @@ func (xs *ConcurrentList) ForEachParallel(f func(interface{}, uint)) {
 		}(focus.val, idx)
 		idx++
 	}
-	wg.Wait()
 	xs.lk.RUnlock()
+	wg.Wait()
 }
 
 func (xs *ConcurrentList) MapParallelInPlace(f func(interface{}, uint) interface{}) {
