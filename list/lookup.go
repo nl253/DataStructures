@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"sync/atomic"
-	"time"
 )
 
 type (
@@ -158,20 +156,13 @@ func (xs *LookupList) ForEachParallel(f func(interface{}, uint)) {
 	xs.lk.RLock()
 	var idx uint32 = 0
 	jobs := make([]*sync.Mutex, xs.size, xs.size)
-	max := N_WORKERS
-	sema := &max
 	for focus := xs.fst; focus != nil; focus = focus.next {
-		for atomic.LoadInt32(sema) <= int32(0) {
-			time.Sleep(SLEEP_DURATION)
-		}
-		atomic.AddInt32(sema, int32(-1))
 		m := &sync.Mutex{}
 		m.Lock()
 		jobs[idx] = m
 		go func(val interface{}, idx uint32) {
 			f(val, uint(idx))
 			jobs[idx].Unlock()
-			atomic.AddInt32(sema, int32(1))
 		}(focus.val, idx)
 		idx++
 	}
@@ -186,20 +177,13 @@ func (xs *LookupList) MapParallelInPlace(f func(interface{}, uint) interface{}) 
 	var idx uint32 = 0
 	xs.lk.Lock()
 	jobs := make([]*sync.Mutex, xs.size, xs.size)
-	max := N_WORKERS
-	sema := &max
 	for focus := xs.fst; focus != nil; focus = focus.next {
-		for atomic.LoadInt32(sema) <= int32(0) {
-			time.Sleep(SLEEP_DURATION)
-		}
-		atomic.AddInt32(sema, int32(-1))
 		m := &sync.Mutex{}
 		m.Lock()
 		jobs[idx] = m
 		go func(node *node, idx uint32) {
 			node.val = f(node.val, uint(idx))
 			jobs[idx].Unlock()
-			atomic.AddInt32(sema, int32(1))
 		}(focus, idx)
 		idx++
 	}

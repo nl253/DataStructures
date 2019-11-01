@@ -152,44 +152,33 @@ func (xs *ConcurrentList) Find(pred func(interface{}, uint) bool) (interface{}, 
 func (xs *ConcurrentList) ForEachParallel(f func(interface{}, uint)) {
 	xs.lk.RLock()
 	var idx uint32 = 0
-	jobs := make([]*sync.Mutex, xs.size, xs.size)
+	wg := &sync.WaitGroup{}
+	wg.Add(int(xs.size))
 	for focus := xs.fst; focus != nil; focus = focus.next {
-		m := &sync.Mutex{}
-		m.Lock()
-		jobs[idx] = m
 		go func(val interface{}, idx uint32) {
 			f(val, uint(idx))
-			jobs[idx].Unlock()
+			wg.Done()
 		}(focus.val, idx)
 		idx++
 	}
+	wg.Wait()
 	xs.lk.RUnlock()
-	for i := uint(0); i < xs.size; i++ {
-		l := jobs[i]
-		l.Lock()
-		l.Unlock()
-	}
 }
 
 func (xs *ConcurrentList) MapParallelInPlace(f func(interface{}, uint) interface{}) {
 	var idx uint32 = 0
 	xs.lk.Lock()
-	jobs := make([]*sync.Mutex, xs.size, xs.size)
+	wg := sync.WaitGroup{}
+	wg.Add(int(xs.size))
 	for focus := xs.fst; focus != nil; focus = focus.next {
-		m := &sync.Mutex{}
-		m.Lock()
-		jobs[idx] = m
 		go func(focus *node, idx uint32) {
 			focus.val = f(focus.val, uint(idx))
-			jobs[idx].Unlock()
+			wg.Done()
 		}(focus, idx)
 		idx++
 	}
+	wg.Wait()
 	xs.lk.Unlock()
-	for i := uint(0); i < xs.size; i++ {
-		jobs[i].Lock()
-		jobs[i].Unlock()
-	}
 }
 
 func (xs *ConcurrentList) Nth(n uint) interface{} {
