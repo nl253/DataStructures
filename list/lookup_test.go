@@ -6,7 +6,7 @@ import (
 	ut "github.com/nl253/Testing"
 )
 
-var fLookup = ut.Mod("LookupList")
+var fLookup = ut.Test("LookupList")
 
 func TestLookupList_MapParallelInPlace(t *testing.T) {
 	should := fLookup("MapParallelInPlace")

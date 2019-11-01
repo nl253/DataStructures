@@ -6,7 +6,7 @@ import (
 	ut "github.com/nl253/Testing"
 )
 
-var fCon = ut.Mod("ConcurrentList")
+var fCon = ut.Test("ConcurrentList")
 
 func TestConcurrentList_MapParallelInPlace(t *testing.T) {
 	should := fCon("MapParallelInPlace")
