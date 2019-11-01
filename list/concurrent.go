@@ -160,27 +160,28 @@ func (xs *ConcurrentList) ForEachParallel(f func(interface{}, uint)) {
 	xs.lk.RLock()
 	var idx uint32 = 0
 	jobs := make([]*sync.Mutex, xs.size, xs.size)
-	max := N_WORKERS
-	sema := &max
+	// max := N_WORKERS
+	// sema := &max
 	for focus := xs.fst; focus != nil; focus = focus.next {
-		for atomic.LoadInt32(sema) <= int32(0) {
-			time.Sleep(SLEEP_DURATION)
-		}
-		atomic.AddInt32(sema, int32(-1))
+		// for atomic.LoadInt32(sema) <= int32(0) {
+		// 	time.Sleep(SLEEP_DURATION)
+		// }
+		// atomic.AddInt32(sema, int32(-1))
 		m := &sync.Mutex{}
 		m.Lock()
 		jobs[idx] = m
 		go func(val interface{}, idx uint32) {
 			f(val, uint(idx))
 			jobs[idx].Unlock()
-			atomic.AddInt32(sema, int32(1))
+			// atomic.AddInt32(sema, int32(1))
 		}(focus.val, idx)
 		idx++
 	}
 	xs.lk.RUnlock()
 	for i := uint(0); i < xs.size; i++ {
-		jobs[i].Lock()
-		jobs[i].Unlock()
+		l := jobs[i]
+		l.Lock()
+		l.Unlock()
 	}
 }
 

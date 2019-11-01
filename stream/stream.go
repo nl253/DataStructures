@@ -2,8 +2,10 @@ package stream
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/nl253/DataStructures/list"
 )
@@ -47,6 +49,85 @@ func (s *Stream) Map(f func(x interface{}) interface{}) *Stream {
 	return newS
 }
 
+func (s *Stream) Tap(f func(x interface{})) *Stream {
+	newS := New()
+	go func() {
+		for {
+			x := s.Pull()
+			if x == EndMarker {
+				newS.Close()
+				return
+			}
+			f(x)
+			newS.PushBack(x)
+		}
+	}()
+	return newS
+}
+
+func (s *Stream) Throttle(d time.Duration) *Stream {
+	newS := New()
+	go func() {
+		for {
+			x := s.Pull()
+			if x == EndMarker {
+				newS.Close()
+				return
+			}
+			time.Sleep(d)
+			newS.PushBack(x)
+		}
+	}()
+	return newS
+}
+
+func (s *Stream) Broadcast(fst *Stream, ss ...*Stream) {
+	go func() {
+		for {
+			x := s.Pull()
+			if x == EndMarker {
+				fst.Close()
+				for _, ssEl := range ss {
+					ssEl.Close()
+				}
+				return
+			}
+			for _, ssEl := range ss {
+				fst.PushBack(x)
+				ssEl.PushBack(x)
+			}
+		}
+	}()
+}
+
+func (s *Stream) Reduce(init interface{}, f func(x interface{}, y interface{}) interface{}) *Stream {
+	newS := New()
+	go func() {
+		for {
+			x := s.Pull()
+			if x == EndMarker {
+				newS.PushBack(init)
+				newS.Close()
+				return
+			}
+			init = f(init, x)
+		}
+	}()
+	return newS
+}
+
+func (s *Stream) Count(init interface{}, f func(x interface{}, y interface{}) interface{}) uint {
+	return s.Reduce(0, func(x interface{}, y interface{}) interface{} {
+		return x.(uint) + 1
+	}).Pull().(uint)
+}
+
+func (s *Stream) Sum(init interface{}, f func(x interface{}, y interface{}) interface{}) int {
+	return s.Reduce(0, func(x interface{}, y interface{}) interface{} {
+		return x.(int) + y.(int)
+	}).Pull().(int)
+}
+
 func (s *Stream) Filter(f func(x interface{}) bool) *Stream {
 	newS := New()
 	go func() {
@@ -64,6 +145,25 @@ func (s *Stream) Filter(f func(x interface{}) bool) *Stream {
 	return newS
 }
 
+func (s *Stream) TakeUntil(f func(x interface{}) bool) *Stream {
+	newS := New()
+	go func() {
+		for {
+			x := s.Pull()
+			if x == EndMarker || !f(x) {
+				newS.Close()
+				return
+			}
+			newS.PushBack(x)
+		}
+	}()
+	return newS
+}
+
+func (s *Stream) TakeWhile(f func(x interface{}) bool) *Stream {
+	return s.TakeUntil(func(x interface{}) bool { return !f(x) })
+}
+
 func (s *Stream) Connect(other *Stream) *Stream {
 	go func() {
 		for {
@@ -76,6 +176,15 @@ func (s *Stream) Connect(other *Stream) *Stream {
 		}
 	}()
 	return other
+}
+
+func Pipeline(s *Stream, ss ...*Stream) *Stream {
+	acc := s
+	end := uint(len(ss))
+	for start := uint(0); start < end; start++ {
+		acc = acc.Connect(ss[start])
+	}
+	return acc
 }
 
 func (s *Stream) PushFront(t interface{}) {
@@ -145,10 +254,19 @@ func (s *Stream) Peek() interface{} {
 func (s *Stream) Close() {
 	s.lk.Lock()
 	s.closed = true
-	s.lks.ForEachParallel(func(l interface{}, u uint) {
+	s.lk.Unlock()
+	runtime.Gosched()
+	s.lks.ForEachParallel(func(l interface{}, _ uint) {
 		s.PushBack(EndMarker)
+	})
+	s.lks.ForEachParallel(func(l interface{}, _ uint) {
 		l.(*sync.Mutex).Unlock()
 	})
+}
+
+func (s *Stream) Clear() {
+	s.lk.Lock()
+	s.buf.Clear()
 	s.lk.Unlock()
 }
 
