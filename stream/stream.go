@@ -33,6 +33,8 @@ func New(xs ...interface{}) *Stream {
 	return s
 }
 
+func From(xs []interface{}) *Stream { return New(xs...) }
+
 func (s *Stream) Map(f func(x interface{}) interface{}) *Stream {
 	newS := New()
 	go func() {

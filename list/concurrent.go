@@ -47,7 +47,7 @@ func Generate(n int, m int, f func(int) interface{}) *ConcurrentList {
 
 func Ints(min int, max int, n uint) *ConcurrentList {
 	r := max - min
-	return Generate(min, max, func(_ int) interface{} { return min + rand.Intn(r) })
+	return Generate(0, int(n), func(_ int) interface{} { return min + rand.Intn(r) })
 }
 
 func Floats(n uint) *ConcurrentList {
@@ -192,31 +192,31 @@ func (xs *ConcurrentList) FindIdx(pred func(interface{}, uint) bool) int {
 	return idx
 }
 
-// FIXME
-func (xs *ConcurrentList) SubList(n uint, m uint) *ConcurrentList {
-	if n == m {
-		return New()
-	} else if m-n == 1 {
-		return New(xs.Nth(n))
-	}
-	xs.lk.Lock()
-	fst := xs.fst
-	i := uint(0)
-	for ; i < n; i++ {
-		fst = fst.next
-	}
-	lst := fst
-	for ; i < m-1; i++ {
-		lst = lst.next
-	}
-	defer xs.lk.Unlock()
-	return &ConcurrentList{
-		fst:  fst,
-		lst:  lst,
-		size: m - n,
-		lk:   &sync.RWMutex{},
-	}
-}
+// // FIXME
+// func (xs *ConcurrentList) SubList(n uint, m uint) *ConcurrentList {
+// 	if n == m {
+// 		return New()
+// 	} else if m-n == 1 {
+// 		return New(xs.Nth(n))
+// 	}
+// 	xs.lk.Lock()
+// 	fst := xs.fst
+// 	i := uint(0)
+// 	for ; i < n; i++ {
+// 		fst = fst.next
+// 	}
+// 	lst := fst
+// 	for ; i < m-1; i++ {
+// 		lst = lst.next
+// 	}
+// 	defer xs.lk.Unlock()
+// 	return &ConcurrentList{
+// 		fst:  fst,
+// 		lst:  lst,
+// 		size: m - n,
+// 		lk:   &sync.RWMutex{},
+// 	}
+// }
 
 func (xs *ConcurrentList) Contains(x interface{}) bool {
 	_, idx := xs.Find(func(y interface{}, _ uint) bool {
@@ -378,6 +378,16 @@ func (xs *ConcurrentList) Size() uint {
 	size := xs.size
 	xs.lk.RUnlock()
 	return size
+}
+
+func (xs *ConcurrentList) Rotate() *ConcurrentList {
+	xs.lk.RLock()
+	defer xs.lk.RUnlock()
+	newList := New()
+	for focus := xs.fst; focus != nil; focus = focus.next {
+		newList.Prepend(focus.val)
+	}
+	return newList
 }
 
 func (xs *ConcurrentList) Reduce(init interface{}, f func(x interface{}, y interface{}, idx uint) interface{}) interface{} {

@@ -144,7 +144,7 @@ func TestConcurrentList_MapParallelInPlace(t *testing.T) {
 		xs.MapParallelInPlace(func(x interface{}, idx uint) interface{} { return x.(int) + 1 })
 		return xs
 	})
-	for _, xs := range []*ConcurrentList{New(), New(1, 2, 3), Ints(-10, 10, 1), Floats(10), Bytes(10), Chars(10), Range(0, 10, 1), Range(-10, 10, 2)} {
+	for _, xs := range []*ConcurrentList{New(), New(1, 2, 3), Ints(-10, 10, 10), Floats(10), Bytes(10), Chars(10), Range(0, 10, 1), Range(-10, 10, 2)} {
 		should("produce valid list", true, func() interface{} {
 			xs.MapParallelInPlace(func(x interface{}, idx uint) interface{} { return 10 })
 			return isValid(xs)
@@ -165,7 +165,7 @@ func TestConcurrentList_Map(t *testing.T) {
 	should("do nothing for empty lists", New(), func() interface{} {
 		return New().Map(func(x interface{}, idx uint) interface{} { return x.(int) + 1 })
 	})
-	for _, xs := range []*ConcurrentList{New(), New(1, 2, 3), Ints(-10, 10, 1), Floats(10), Bytes(10), Chars(10), Range(0, 10, 1), Range(-10, 10, 2)} {
+	for _, xs := range []*ConcurrentList{New(), New(1, 2, 3), Ints(-10, 10, 10), Floats(10), Bytes(10), Chars(10), Range(0, 10, 1), Range(-10, 10, 2)} {
 		should("produce valid list", true, func() interface{} {
 			return isValid(xs.Map(func(x interface{}, idx uint) interface{} { return 10 }))
 		})
@@ -191,7 +191,7 @@ func TestConcurrentList_MapParallel(t *testing.T) {
 			return x.(int) + 1
 		})
 	})
-	for _, xs := range []*ConcurrentList{New(), New(1, 2, 3), Ints(-10, 10, 1), Floats(10), Bytes(10), Chars(10), Range(0, 10, 1), Range(-10, 10, 2)} {
+	for _, xs := range []*ConcurrentList{New(), New(1, 2, 3), Ints(-10, 10, 10), Floats(10), Bytes(10), Chars(10), Range(0, 10, 1), Range(-10, 10, 2)} {
 		should("produce valid list", true, func() interface{} {
 			return isValid(xs.MapParallel(func(x interface{}, idx uint) interface{} { return 10 }))
 		})
@@ -226,7 +226,7 @@ func TestConcurrentList_Append(t *testing.T) {
 		xs.Append(0)
 		return xs
 	})
-	for _, xs := range []*ConcurrentList{New(), New(1, 2, 3), Ints(-10, 10, 1), Floats(10), Bytes(10), Chars(10), Range(0, 10, 1), Range(-10, 10, 2)} {
+	for _, xs := range []*ConcurrentList{New(), New(1, 2, 3), Ints(-10, 10, 10), Floats(10), Bytes(10), Chars(10), Range(0, 10, 1), Range(-10, 10, 2)} {
 		should("produce valid list", true, func() interface{} {
 			xs.Append(rand.Int())
 			xs.Append(rand.Float64())
@@ -248,7 +248,7 @@ func TestConcurrentList_Prepend(t *testing.T) {
 		xs.Prepend(0)
 		return xs
 	})
-	for _, xs := range []*ConcurrentList{New(), New(1, 2, 3), Ints(-10, 10, 1), Floats(10), Bytes(10), Chars(10), Range(0, 10, 1), Range(-10, 10, 2)} {
+	for _, xs := range []*ConcurrentList{New(), New(1, 2, 3), Ints(-10, 10, 10), Floats(10), Bytes(10), Chars(10), Range(0, 10, 1), Range(-10, 10, 2)} {
 		should("produce valid list", true, func() interface{} {
 			xs.Prepend(rand.Int())
 			xs.Prepend(rand.Float64())
@@ -265,7 +265,7 @@ func TestConcurrentList_PopFront(t *testing.T) {
 		xs.PopFront()
 		return xs
 	})
-	for _, xs := range []*ConcurrentList{New(1, 2, 3), Ints(-10, 10, 1), Floats(10), Bytes(10), Chars(10), Range(0, 10, 1), Range(-10, 10, 2)} {
+	for _, xs := range []*ConcurrentList{New(1, 2, 3), Ints(-10, 10, 10), Floats(10), Bytes(10), Chars(10), Range(0, 10, 1), Range(-10, 10, 2)} {
 		should("produce valid list", true, func() interface{} {
 			xs.PopFront()
 			return isValid(xs)
