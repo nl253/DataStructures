@@ -311,26 +311,26 @@ func (s *Stream) Eq(x interface{}) bool {
 }
 
 func (s *Stream) String() string {
-	s.lk.Lock()
 	lk := sync.RWMutex{}
+	s.lk.Lock()
 	xs := make([]string, s.buf.Size())
-	s.buf.ForEachParallel(func(i interface{}, u uint) {
+	s.buf.ForEachParallel(func(x interface{}, idx uint) {
 		lk.RLock()
-		for u >= uint(len(xs)) {
+		for idx >= uint(len(xs)) {
 			lk.RUnlock()
 			lk.Lock()
 			xs = append(xs, "")
 			lk.Unlock()
 			lk.RLock()
 		}
-		switch i.(type) {
+		switch x.(type) {
 		case fmt.Stringer:
-			xs[u] = i.(fmt.Stringer).String()
+			xs[idx] = x.(fmt.Stringer).String()
 		default:
-			xs[u] = fmt.Sprintf("%v", i)
+			xs[idx] = fmt.Sprintf("%v", x)
 		}
 		lk.RUnlock()
 	})
 	s.lk.Unlock()
-	return fmt.Sprintf("| %s |", strings.Join(xs, " < "))
+	return fmt.Sprintf("|%s|", strings.Join(xs, " < "))
 }

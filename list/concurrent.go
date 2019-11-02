@@ -2,6 +2,7 @@ package list
 
 import (
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
 )
@@ -28,9 +29,9 @@ func New(xs ...interface{}) *ConcurrentList {
 	return newList
 }
 
-func Range(n int, m int) *ConcurrentList {
+func Range(n int, m int, step int) *ConcurrentList {
 	xs := New()
-	for i := n; i < m; i++ {
+	for i := n; i < m; i += step {
 		xs.Append(i)
 	}
 	return xs
@@ -44,24 +45,42 @@ func Generate(n int, m int, f func(int) interface{}) *ConcurrentList {
 	return xs
 }
 
+func Ints(min int, max int, n uint) *ConcurrentList {
+	r := max - min
+	return Generate(min, max, func(_ int) interface{} { return min + rand.Intn(r) })
+}
+
+func Floats(n uint) *ConcurrentList {
+	return Generate(0, int(n), func(_ int) interface{} { return rand.Float64() })
+}
+
+func Bytes(n uint) *ConcurrentList {
+	return Generate(0, int(n), func(_ int) interface{} { return byte(rand.Intn(256)) })
+}
+
+func Chars(n uint) *ConcurrentList {
+	return Generate(0, int(n), func(_ int) interface{} { return rand.Int31() })
+}
+
 func (xs *ConcurrentList) Tail() *ConcurrentList {
-	if xs.Size() == 1 {
+	xs.lk.RLock()
+	if xs.size == 1 {
+		xs.lk.RUnlock()
 		return New()
 	}
-	xs.lk.RLock()
-	defer xs.lk.RUnlock()
-	return &ConcurrentList{
+	tail := &ConcurrentList{
 		fst:  xs.fst.next,
 		lst:  xs.lst,
 		size: xs.size - 1,
 		lk:   &sync.RWMutex{},
 	}
+	xs.lk.RUnlock()
+	return tail
 }
 
 func (xs *ConcurrentList) Append(val interface{}) {
 	newNode := &node{val: val, next: nil}
 	xs.lk.Lock()
-	defer xs.lk.Unlock()
 	if xs.size == 0 {
 		xs.fst = newNode
 		xs.lst = newNode
@@ -70,11 +89,11 @@ func (xs *ConcurrentList) Append(val interface{}) {
 		xs.lst = newNode
 	}
 	xs.size++
+	xs.lk.Unlock()
 }
 
 func (xs *ConcurrentList) Prepend(val interface{}) {
 	xs.lk.Lock()
-	defer xs.lk.Unlock()
 	if xs.size == 0 {
 		newNode := &node{val: val, next: nil}
 		xs.fst = newNode
@@ -83,6 +102,7 @@ func (xs *ConcurrentList) Prepend(val interface{}) {
 		xs.fst = &node{val: val, next: xs.fst}
 	}
 	xs.size++
+	xs.lk.Unlock()
 }
 
 func (xs *ConcurrentList) PeekFront() interface{} {
@@ -136,6 +156,19 @@ func (xs *ConcurrentList) Remove(pred func(interface{}, uint) bool) (interface{}
 	return nil, -1
 }
 
+func (xs *ConcurrentList) RemoveAt(n uint) (interface{}, int) {
+	return xs.Remove(func(_ interface{}, idx uint) bool {
+		return idx == n
+	})
+}
+
+func (xs *ConcurrentList) RemoveVal(x interface{}) int {
+	_, i := xs.Remove(func(val interface{}, _ uint) bool {
+		return val == x
+	})
+	return i
+}
+
 func (xs *ConcurrentList) Find(pred func(interface{}, uint) bool) (interface{}, int) {
 	idx := uint(0)
 	xs.lk.RLock()
@@ -147,6 +180,56 @@ func (xs *ConcurrentList) Find(pred func(interface{}, uint) bool) (interface{}, 
 		idx++
 	}
 	return nil, -1
+}
+
+func (xs *ConcurrentList) FindVal(pred func(interface{}, uint) bool) interface{} {
+	find, _ := xs.Find(pred)
+	return find
+}
+
+func (xs *ConcurrentList) FindIdx(pred func(interface{}, uint) bool) int {
+	_, idx := xs.Find(pred)
+	return idx
+}
+
+// FIXME
+func (xs *ConcurrentList) SubList(n uint, m uint) *ConcurrentList {
+	if n == m {
+		return New()
+	} else if m-n == 1 {
+		return New(xs.Nth(n))
+	}
+	xs.lk.Lock()
+	fst := xs.fst
+	i := uint(0)
+	for ; i < n; i++ {
+		fst = fst.next
+	}
+	lst := fst
+	for ; i < m-1; i++ {
+		lst = lst.next
+	}
+	defer xs.lk.Unlock()
+	return &ConcurrentList{
+		fst:  fst,
+		lst:  lst,
+		size: m - n,
+		lk:   &sync.RWMutex{},
+	}
+}
+
+func (xs *ConcurrentList) Contains(x interface{}) bool {
+	_, idx := xs.Find(func(y interface{}, _ uint) bool {
+		return y == x
+	})
+	return idx >= 0
+}
+
+func (xs *ConcurrentList) IdxOf(x interface{}) int {
+	_, idx := xs.Find(func(y interface{}, _ uint) bool {
+		return y == x
+	})
+	return idx
 }
 
 func (xs *ConcurrentList) ForEachParallel(f func(interface{}, uint)) {
@@ -165,6 +248,16 @@ func (xs *ConcurrentList) ForEachParallel(f func(interface{}, uint)) {
 	wg.Wait()
 }
 
+func (xs *ConcurrentList) ForEach(f func(interface{}, uint)) {
+	var idx uint32 = 0
+	xs.lk.RLock()
+	for focus := xs.fst; focus != nil; focus = focus.next {
+		f(focus.val, uint(idx))
+		idx++
+	}
+	xs.lk.RUnlock()
+}
+
 func (xs *ConcurrentList) MapParallelInPlace(f func(interface{}, uint) interface{}) {
 	var idx uint32 = 0
 	xs.lk.Lock()
@@ -179,6 +272,77 @@ func (xs *ConcurrentList) MapParallelInPlace(f func(interface{}, uint) interface
 	}
 	wg.Wait()
 	xs.lk.Unlock()
+}
+
+func (xs *ConcurrentList) MapInPlace(f func(interface{}, uint) interface{}) {
+	var idx uint32 = 0
+	xs.lk.Lock()
+	for focus := xs.fst; focus != nil; focus = focus.next {
+		focus.val = f(focus.val, uint(idx))
+		idx++
+	}
+	xs.lk.Unlock()
+}
+
+func (xs *ConcurrentList) Map(f func(interface{}, uint) interface{}) *ConcurrentList {
+	xs.lk.RLock()
+	defer xs.lk.RUnlock()
+	if xs.size == 0 {
+		return New()
+	}
+	lst := &node{val: f(xs.fst.val, 0)}
+	fst := lst
+	var idx uint = 1
+	for focus := xs.fst.next; focus != nil; focus = focus.next {
+		lst.next = &node{val: f(focus.val, idx)}
+		if focus.next != nil {
+			lst = lst.next
+			idx++
+		}
+	}
+	return &ConcurrentList{
+		fst:  fst,
+		lst:  lst,
+		size: xs.size,
+		lk:   &sync.RWMutex{},
+	}
+}
+
+func (xs *ConcurrentList) MapParallel(f func(interface{}, uint) interface{}) *ConcurrentList {
+	xs.lk.RLock()
+	defer xs.lk.RUnlock()
+	if xs.size == 0 {
+		return New()
+	}
+	lst := &node{val: f(xs.fst.val, 0)}
+	fst := lst
+	wg := &sync.WaitGroup{}
+	wg.Add(int(xs.size) - 1)
+	var idx uint = 1
+	for focus := xs.fst.next; focus != nil; focus = focus.next {
+		lst.next = &node{}
+		go func(lst *node, v interface{}) {
+			lst.val = f(v, idx)
+			wg.Done()
+		}(lst.next, focus.val)
+		if focus.next != nil {
+			lst = lst.next
+			idx++
+		}
+	}
+	wg.Wait()
+	return &ConcurrentList{
+		fst:  fst,
+		lst:  lst,
+		size: xs.size,
+		lk:   &sync.RWMutex{},
+	}
+}
+
+func (xs *ConcurrentList) Clone() *ConcurrentList {
+	return xs.Map(func(i interface{}, _ uint) interface{} {
+		return i
+	})
 }
 
 func (xs *ConcurrentList) Nth(n uint) interface{} {
@@ -264,25 +428,25 @@ func (xs *ConcurrentList) Eq(_ys interface{}) bool {
 }
 
 func (xs *ConcurrentList) String() string {
-	lk := sync.RWMutex{}
-	n := xs.Size()
-	s := make([]string, n)
-	xs.ForEachParallel(func(x interface{}, idx uint) {
-		lk.RLock()
-		if idx >= uint(len(s)) {
-			lk.RUnlock()
-			lk.Lock()
-			s = append(s, "")
-			lk.Unlock()
-			lk.RLock()
-		}
-		switch x.(type) {
-		case fmt.Stringer:
-			s[idx] = x.(fmt.Stringer).String()
-		default:
-			s[idx] = fmt.Sprintf("%v", x)
-		}
-		lk.RUnlock()
-	})
-	return fmt.Sprintf("[%s]", strings.Join(s, " "))
+	var idx uint = 0
+	wg := &sync.WaitGroup{}
+	xs.lk.RLock()
+	n := xs.size
+	parts := make([]string, n, n)
+	wg.Add(int(n))
+	for focus := xs.fst; focus != nil; focus = focus.next {
+		go func(val interface{}, idx uint) {
+			switch val.(type) {
+			case fmt.Stringer:
+				parts[idx] = val.(fmt.Stringer).String()
+			default:
+				parts[idx] = fmt.Sprintf("%v", val)
+			}
+			wg.Done()
+		}(focus.val, idx)
+		idx++
+	}
+	xs.lk.RUnlock()
+	wg.Wait()
+	return fmt.Sprintf("[%s]", strings.Join(parts, " "))
 }
