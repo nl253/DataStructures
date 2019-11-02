@@ -437,6 +437,29 @@ func (xs *ConcurrentList) Eq(_ys interface{}) bool {
 	}
 }
 
+func (xs *ConcurrentList) Join(delim string) string {
+	s := xs.ToSlice()
+	n := len(s)
+	parts := make([]string, n, n)
+	for idx, x := range s {
+		parts[idx] = x.(string)
+	}
+	return strings.Join(parts, delim)
+}
+
+func (xs *ConcurrentList) ToSlice() []interface{} {
+	var idx uint = 0
+	xs.lk.RLock()
+	n := xs.size
+	parts := make([]interface{}, n, n)
+	for focus := xs.fst; focus != nil; focus = focus.next {
+		parts[idx] = focus.val
+		idx++
+	}
+	xs.lk.RUnlock()
+	return parts
+}
+
 func (xs *ConcurrentList) String() string {
 	var idx uint = 0
 	wg := &sync.WaitGroup{}

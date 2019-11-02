@@ -2,6 +2,7 @@ package stream
 
 import (
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -35,6 +36,31 @@ func New(xs ...interface{}) *Stream {
 
 func From(xs []interface{}) *Stream { return New(xs...) }
 
+func Generate(n int, m int, step int, f func(n int) interface{}) *Stream {
+	s := New()
+	for start := n; start < m; start += step {
+		s.PushBack(f(start))
+	}
+	return s
+}
+
+func Range(n int, m int, step int) *Stream {
+	return Generate(n, m, step, func(x int) interface{} { return x })
+}
+
+func Ints(min int, max int, n int) *Stream {
+	r := max - min
+	return Generate(0, n, 1, func(x int) interface{} { return min + rand.Intn(r) })
+}
+
+func Bytes(n int) *Stream {
+	return Generate(0, n, 1, func(x int) interface{} { return byte(rand.Intn(256)) })
+}
+
+func Floats(n int) *Stream {
+	return Generate(0, n, 1, func(x int) interface{} { return rand.Float64() })
+}
+
 func (s *Stream) Map(f func(x interface{}) interface{}) *Stream {
 	newS := New()
 	go func() {
@@ -51,35 +77,17 @@ func (s *Stream) Map(f func(x interface{}) interface{}) *Stream {
 }
 
 func (s *Stream) Tap(f func(x interface{})) *Stream {
-	newS := New()
-	go func() {
-		for {
-			x := s.Pull()
-			if x == EndMarker {
-				newS.Close()
-				return
-			}
-			f(x)
-			newS.PushBack(x)
-		}
-	}()
-	return newS
+	return s.Map(func(x interface{}) interface{} {
+		f(x)
+		return x
+	})
 }
 
 func (s *Stream) Throttle(d time.Duration) *Stream {
-	newS := New()
-	go func() {
-		for {
-			x := s.Pull()
-			if x == EndMarker {
-				newS.Close()
-				return
-			}
-			time.Sleep(d)
-			newS.PushBack(x)
-		}
-	}()
-	return newS
+	return s.Map(func(x interface{}) interface{} {
+		time.Sleep(d)
+		return x
+	})
 }
 
 func (s *Stream) Delay(d time.Duration) *Stream {
@@ -109,8 +117,8 @@ func (s *Stream) Broadcast(fst *Stream, ss ...*Stream) {
 				}
 				return
 			}
+			fst.PushBack(x)
 			for _, ssEl := range ss {
-				fst.PushBack(x)
 				ssEl.PushBack(x)
 			}
 		}
@@ -133,16 +141,28 @@ func (s *Stream) Reduce(init interface{}, f func(x interface{}, y interface{}) i
 	return newS
 }
 
+func (s *Stream) Scan(init interface{}, f func(x interface{}, y interface{}) interface{}) *Stream {
+	newS := New()
+	go func() {
+		for {
+			x := s.Pull()
+			if x == EndMarker {
+				newS.Close()
+				return
+			}
+			init = f(init, x)
+			newS.PushBack(init)
+		}
+	}()
+	return newS
+}
+
 func (s *Stream) Count(init interface{}, f func(x interface{}, y interface{}) interface{}) uint {
-	return s.Reduce(0, func(x interface{}, y interface{}) interface{} {
-		return x.(uint) + 1
-	}).Pull().(uint)
+	return s.Reduce(0, func(x interface{}, y interface{}) interface{} { return x.(uint) + 1 }).Pull().(uint)
 }
 
 func (s *Stream) Sum(init interface{}, f func(x interface{}, y interface{}) interface{}) int {
-	return s.Reduce(0, func(x interface{}, y interface{}) interface{} {
-		return x.(int) + y.(int)
-	}).Pull().(int)
+	return s.Reduce(0, func(x interface{}, y interface{}) interface{} { return x.(int) + y.(int) }).Pull().(int)
 }
 
 func (s *Stream) Filter(f func(x interface{}) bool) *Stream {
@@ -313,26 +333,25 @@ func (s *Stream) Eq(x interface{}) bool {
 }
 
 func (s *Stream) String() string {
-	lk := sync.RWMutex{}
+	parts := make([]string, 0)
+	pLk := &sync.RWMutex{}
 	s.lk.Lock()
-	xs := make([]string, s.buf.Size())
 	s.buf.ForEachParallel(func(x interface{}, idx uint) {
-		lk.RLock()
-		for idx >= uint(len(xs)) {
-			lk.RUnlock()
-			lk.Lock()
-			xs = append(xs, "")
-			lk.Unlock()
-			lk.RLock()
-		}
-		switch x.(type) {
-		case fmt.Stringer:
-			xs[idx] = x.(fmt.Stringer).String()
-		default:
-			xs[idx] = fmt.Sprintf("%v", x)
-		}
-		lk.RUnlock()
+		go func(x interface{}, idx int) {
+			pLk.Lock()
+			for idx >= len(parts) {
+				parts = append(parts, "")
+			}
+			pLk.Unlock()
+			switch x.(type) {
+			case fmt.Stringer:
+				parts[idx] = x.(fmt.Stringer).String()
+			default:
+				parts[idx] = fmt.Sprintf("%v", x)
+			}
+		}(x, int(idx))
+		idx++
 	})
 	s.lk.Unlock()
-	return fmt.Sprintf("|%s|", strings.Join(xs, " < "))
+	return fmt.Sprintf("|%s|", strings.Join(parts, " < "))
 }
