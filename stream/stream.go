@@ -130,16 +130,12 @@ func (s *Stream) Broadcast(fst *Stream, ss ...*Stream) {
 	}()
 }
 
-func (s *Stream) Reduce(init interface{}, f func(x interface{}, y interface{}) interface{}) *Stream {
-	newS := New()
-	go func() {
-		for x := s.Pull(); x != EndMarker; x = s.Pull() {
-			init = f(init, x)
-		}
-		newS.PushBack(init)
-		newS.Close()
-	}()
-	return newS
+func (s *Stream) Reduce(s0 interface{}, f func(x interface{}, y interface{}) interface{}) interface{} {
+	init := s0
+	for x := s.Pull(); x != EndMarker; x = s.Pull() {
+		init = f(init, x)
+	}
+	return init
 }
 
 func (s *Stream) Scan(init interface{}, f func(x interface{}, y interface{}) interface{}) *Stream {
@@ -155,11 +151,20 @@ func (s *Stream) Scan(init interface{}, f func(x interface{}, y interface{}) int
 }
 
 func (s *Stream) Count() uint {
-	return s.Reduce(uint(0), func(x interface{}, y interface{}) interface{} { return x.(uint) + 1 }).Pull().(uint)
+	return s.Reduce(uint(0), func(x interface{}, y interface{}) interface{} { return x.(uint) + 1 }).(uint)
 }
 
 func (s *Stream) Sum() int {
-	return s.Reduce(0, func(x interface{}, y interface{}) interface{} { return x.(int) + y.(int) }).Pull().(int)
+	return s.Reduce(0, func(x interface{}, y interface{}) interface{} { return x.(int) + y.(int) }).(int)
+}
+
+func (s *Stream) Concat() string {
+	return s.Reduce("", func(x interface{}, y interface{}) interface{} { return x.(string) + y.(string) }).(string)
+}
+
+func (s *Stream) Join(delim string) string {
+	str := s.Reduce("", func(x interface{}, y interface{}) interface{} { return x.(string) + delim }).(string)
+	return str[:len(str)-len(delim)]
 }
 
 func (s *Stream) Filter(f func(x interface{}) bool) *Stream {
@@ -173,6 +178,24 @@ func (s *Stream) Filter(f func(x interface{}) bool) *Stream {
 		newS.Close()
 	}()
 	return newS
+}
+
+func (s *Stream) Flatten() *Stream {
+	newS := New()
+	go func() {
+		for x := s.Pull(); x != EndMarker; x = s.Pull() {
+			stream := x.(*Stream)
+			for y := stream.Pull(); y != EndMarker; y = stream.Pull() {
+				newS.PushBack(x)
+			}
+		}
+		newS.Close()
+	}()
+	return newS
+}
+
+func (s *Stream) FlatMap(f func(x interface{}) *Stream) *Stream {
+	return s.Map(func(x interface{}) interface{} { return f(x) }).Flatten()
 }
 
 func (s *Stream) TakeUntil(f func(x interface{}) bool) *Stream {
@@ -209,6 +232,10 @@ func Pipeline(s *Stream, ss ...*Stream) *Stream {
 	return acc
 }
 
+func (s *Stream) Closed() bool {
+	return s.Peek() == EndMarker
+}
+
 func (s *Stream) PushFront(t interface{}) {
 	s.bufLk.Lock()
 	s.buf.Prepend(t)
@@ -239,7 +266,7 @@ func (s *Stream) BufSize() uint {
 	return size
 }
 
-func (s *Stream) Empty() bool {
+func (s *Stream) BufEmpty() bool {
 	s.bufLk.Lock()
 	isEmpty := s.buf.Size() == 0 || s.buf.All(func(z interface{}) bool { return z == EndMarker })
 	s.bufLk.Unlock()
@@ -272,23 +299,8 @@ func (s *Stream) Pull() interface{} {
 
 func (s *Stream) PullN(n uint) []interface{} {
 	xs := make([]interface{}, n)
-	s.bufLk.Lock()
-	s.lksLk.Lock()
-	defer s.bufLk.Unlock()
-	defer s.lksLk.Unlock()
 	for i := uint(0); i < n; i++ {
-		if s.buf.Empty() {
-			if s.closed {
-				xs[i] = EndMarker
-				continue
-			}
-			l := &sync.Mutex{}
-			l.Lock()
-			s.lks.Append(l)
-			l.Lock()
-			l.Unlock()
-		}
-		xs[i] = s.buf.PopFront()
+		xs[i] = s.Pull()
 	}
 	return xs
 }
@@ -377,7 +389,7 @@ func (s *Stream) Eq(x interface{}) bool {
 func (s *Stream) String() string {
 	parts := make([]string, 0)
 	s.bufLk.Lock()
-	s.buf.ForEachParallel(func(x interface{}, idx uint) {
+	s.buf.ForEach(func(x interface{}, idx uint) {
 		switch x.(type) {
 		case fmt.Stringer:
 			parts[idx] = x.(fmt.Stringer).String()

@@ -78,7 +78,7 @@ func TestConcurrentArrayList_Concurrency(t *testing.T) {
 //             return xs.Contains(value)
 //         })
 //     }
-//     for !xs.Empty() {
+//     for !xs.BufEmpty() {
 //         size := int(xs.Size())
 //         idx := rand.Intn(size)
 //         x := xs.Nth(uint(idx))
@@ -274,7 +274,7 @@ func TestConcurrentArrayList_PeekBack(t *testing.T) {
 }
 
 func TestConcurrentArrayList_Empty(t *testing.T) {
-	should := fCon("Empty", t)
+	should := fCon("BufEmpty", t)
 	should("be true for empty list", true, func() interface{} { return New().Empty() })
 	should("be false for non-empty list", false, func() interface{} { return New(1).Empty() })
 }

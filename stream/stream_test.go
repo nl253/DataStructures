@@ -52,7 +52,7 @@ func TestStream_Concurrency(t *testing.T) {
 	should := fStream("general concurrency", t)
 	should("not freeze the runtime", true, func() interface{} {
 		ss := New(1, 2, 3).Close()
-		return ss.Pull() == 1 && ss.Pull() == 2 && ss.Pull() == 3 && ss.Pull() == EndMarker && ss.Pull() == EndMarker && ss.Empty()
+		return ss.Pull() == 1 && ss.Pull() == 2 && ss.Pull() == 3 && ss.Pull() == EndMarker && ss.Pull() == EndMarker && ss.BufEmpty()
 	})
 	should("after close, all pulls result in EndMarker", true, func() interface{} {
 		ss := New().Close()
