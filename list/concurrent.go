@@ -66,18 +66,16 @@ func Chars(n uint) *ConcurrentList {
 
 func (xs *ConcurrentList) Tail() *ConcurrentList {
 	xs.lk.RLock()
+	defer xs.lk.RUnlock()
 	if xs.size == 1 {
-		xs.lk.RUnlock()
 		return New()
 	}
-	tail := &ConcurrentList{
+	return &ConcurrentList{
 		fst:  xs.fst.next,
 		lst:  xs.lst,
 		size: xs.size - 1,
 		lk:   &sync.RWMutex{},
 	}
-	xs.lk.RUnlock()
-	return tail
 }
 
 func (xs *ConcurrentList) Append(val interface{}) {
@@ -261,7 +259,7 @@ func (xs *ConcurrentList) MapParallelInPlace(f func(interface{}, uint) interface
 	xs.lk.Lock()
 	js := make([]*job.Running, xs.size, xs.size)
 	for focus := xs.fst; focus != nil; focus = focus.next {
-		js[idx] = job.NewConsumer(func(args ...interface{}) { focus.val = f(args[0], args[1].(uint)) }).Start(focus.val, idx)
+		js[idx] = job.NewConsumer(func(args ...interface{}) { args[0].(*node).val = f(args[0].(*node).val, args[1].(uint)) }).Start(focus, idx)
 		idx++
 	}
 	job.ConsumeRunning(js...)
@@ -314,7 +312,7 @@ func (xs *ConcurrentList) MapParallel(f func(interface{}, uint) interface{}) *Co
 	var idx uint = 1
 	for focus := xs.fst.next; focus != nil; focus = focus.next {
 		lst.next = &node{}
-		js[idx] = job.NewConsumer(func(args ...interface{}) { lst.val = f(args[0], args[1].(uint)) }).Start(lst.next, idx)
+		js[idx-1] = job.NewConsumer(func(args ...interface{}) { args[0].(*node).val = f(args[1], args[2].(uint)) }).Start(lst.next, focus.val, idx)
 		if focus.next != nil {
 			lst = lst.next
 			idx++
