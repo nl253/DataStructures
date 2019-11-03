@@ -58,13 +58,45 @@ func TestStream_Concurrency(t *testing.T) {
 		ss := New().Close()
 		return ss.Pull() == EndMarker && ss.Pull() == EndMarker
 	})
+	for i := 0; i < 10; i++ {
+		should("not freeze the runtime", true, func() interface{} {
+			ss := New()
+			go func() {
+				for j := 0; j < 10; j++ {
+					go func() {
+						ss.PushBack(rand.Int())
+					}()
+				}
+			}()
+			ss.Close()
+			for j := 0; j < 10; j++ {
+				if ss.Pull() != EndMarker {
+					fmt.Printf("expected non-end-marker but got endmarker\n")
+					return false
+				}
+			}
+			for j := 0; j < 10; j++ {
+				if x := ss.Pull(); x != EndMarker {
+					fmt.Printf("expected end-marker but got %v :: %T\n", x, x)
+					return false
+				}
+			}
+			return true
+		})
+	}
 }
 
 func TestStream_Range(t *testing.T) {
 	should := fStream("Range", t)
-	should("range", list.New(1, 2, 3), func() interface{} { return Range(1, 4, 1).PullAll() })
-	should("range empty", list.New(), func() interface{} { return Range(0, 0, 1).PullAll() })
+	should("range puts ints from [min, max) to stream", list.New(1, 2, 3), func() interface{} { return Range(1, 4, 1).PullAll() })
+	should("range with upper = lower gives an empty stream", list.New(), func() interface{} { return Range(0, 0, 1).PullAll() })
 	should("generate valid stream", true, func() interface{} { return isValid(Range(1, 4, 1)) })
+}
+
+func TestStream_Drain(t *testing.T) {
+	should := fStream("Drain", t)
+	should("drain internal buffer to list", list.New(1, 4, 1), func() interface{} { return New(1, 4, 1).Drain() })
+	should("drain empty internal buffer to empty list", list.New(), func() interface{} { return New().Drain() })
 }
 
 func TestStream_PullAll(t *testing.T) {
