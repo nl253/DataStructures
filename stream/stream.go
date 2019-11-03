@@ -96,6 +96,12 @@ func (s *Stream) Tap(f func(x interface{})) *Stream {
 	})
 }
 
+func (s *Stream) ForEach(f func(x interface{})) {
+	for x := s.Pull(); x != EndMarker; x = s.Pull() {
+		f(x)
+	}
+}
+
 func (s *Stream) Throttle(d time.Duration) *Stream {
 	return s.Map(func(x interface{}) interface{} {
 		time.Sleep(d)
