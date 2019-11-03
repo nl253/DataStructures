@@ -63,9 +63,9 @@ func Range(n int, m int, step int) *Stream {
 	return Generate(n, m, step, func(x int) interface{} { return x })
 }
 
-func Ints(min int, max int, n int) *Stream {
+func Ints(min int, max int, n uint) *Stream {
 	r := max - min
-	return Generate(0, n, 1, func(x int) interface{} { return min + rand.Intn(r) })
+	return Generate(0, int(n), 1, func(x int) interface{} { return min + rand.Intn(r) })
 }
 
 func Bytes(n int) *Stream {
@@ -376,23 +376,14 @@ func (s *Stream) Eq(x interface{}) bool {
 
 func (s *Stream) String() string {
 	parts := make([]string, 0)
-	pLk := &sync.RWMutex{}
 	s.bufLk.Lock()
 	s.buf.ForEachParallel(func(x interface{}, idx uint) {
-		go func(x interface{}, idx int) {
-			pLk.Lock()
-			for idx >= len(parts) {
-				parts = append(parts, "")
-			}
-			pLk.Unlock()
-			switch x.(type) {
-			case fmt.Stringer:
-				parts[idx] = x.(fmt.Stringer).String()
-			default:
-				parts[idx] = fmt.Sprintf("%v", x)
-			}
-		}(x, int(idx))
-		idx++
+		switch x.(type) {
+		case fmt.Stringer:
+			parts[idx] = x.(fmt.Stringer).String()
+		default:
+			parts[idx] = fmt.Sprintf("%v", x)
+		}
 	})
 	s.bufLk.Unlock()
 	return fmt.Sprintf("|%s|", strings.Join(parts, " < "))

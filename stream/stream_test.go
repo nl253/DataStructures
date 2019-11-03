@@ -130,3 +130,38 @@ func TestStream_Map(t *testing.T) {
 		return isValid(Range(0, 0, 1).Map(func(x interface{}) interface{} { return x.(int) + 1 }))
 	})
 }
+
+func Benchmark_PushBack(b *testing.B) {
+	n := uint(1000000)
+	s := New()
+	for i := uint(0); i < n; i++ {
+		s.PushBack(i)
+	}
+}
+
+func Benchmark_PushFront(b *testing.B) {
+	n := uint(1000000)
+	s := New()
+	for i := uint(0); i < n; i++ {
+		s.PushFront(i)
+	}
+}
+
+func Benchmark_Pull(b *testing.B) {
+	n := uint(100000)
+	s := Range(0, int(n), 1)
+	for i := uint(0); i < n; i++ {
+		none(s.Pull())
+	}
+}
+
+func Benchmark_Index_Slice(b *testing.B) {
+	n := uint(100000)
+	s := make([]interface{}, n, n)
+	for i := uint(0); i < n; i++ {
+		none(s[0])
+		s = s[1:]
+	}
+}
+
+func none(x interface{}) {}

@@ -124,10 +124,12 @@ func (xs *ConcurrentList) PopFront() interface{} {
 	x := xs.fst.val
 	xs.fst = xs.fst.next
 	xs.size--
+	// go func() {
 	if xs.fst == nil {
 		xs.lst = nil
 	}
 	xs.lk.Unlock()
+	// }()
 	return x
 }
 
@@ -478,25 +480,19 @@ func (xs *ConcurrentList) ToSlice() []interface{} {
 
 func (xs *ConcurrentList) String() string {
 	var idx uint = 0
-	wg := &sync.WaitGroup{}
 	xs.lk.RLock()
 	n := xs.size
 	parts := make([]string, n, n)
-	wg.Add(int(n))
 	for focus := xs.fst; focus != nil; focus = focus.next {
-		go func(val interface{}, idx uint) {
-			switch val.(type) {
-			case fmt.Stringer:
-				parts[idx] = val.(fmt.Stringer).String()
-			default:
-				parts[idx] = fmt.Sprintf("%v", val)
-			}
-			wg.Done()
-		}(focus.val, idx)
+		switch focus.val.(type) {
+		case fmt.Stringer:
+			parts[idx] = focus.val.(fmt.Stringer).String()
+		default:
+			parts[idx] = fmt.Sprintf("%v", focus.val)
+		}
 		idx++
 	}
 	xs.lk.RUnlock()
-	wg.Wait()
 	return fmt.Sprintf("[%s]", strings.Join(parts, " "))
 }
 
