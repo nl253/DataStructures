@@ -232,6 +232,12 @@ func (xs *ConcurrentList) IdxOf(x interface{}) int {
 	return idx
 }
 
+func Repeat(x interface{}, n uint) *ConcurrentList {
+	return Generate(0, int(n), func(_ int) interface{} {
+		return x
+	})
+}
+
 func (xs *ConcurrentList) ForEachParallel(f func(interface{}, uint)) {
 	xs.lk.RLock()
 	var idx uint32 = 0
