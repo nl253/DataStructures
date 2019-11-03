@@ -5,6 +5,8 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
+
+	"github.com/nl253/Concurrency/job"
 )
 
 type (
@@ -194,7 +196,7 @@ func (xs *ConcurrentList) FindIdx(pred func(interface{}, uint) bool) int {
 	return idx
 }
 
-func (xs *ConcurrentList) SubList(n uint, m uint) *ConcurrentList {
+func (xs *ConcurrentList) Slice(n uint, m uint) *ConcurrentList {
 	if n == m {
 		return New()
 	}
@@ -202,13 +204,13 @@ func (xs *ConcurrentList) SubList(n uint, m uint) *ConcurrentList {
 	defer xs.lk.RUnlock()
 	newXS := New()
 	focus := xs.fst
-	for i := uint(0) ; i < n; i++ {
-	    focus = focus.next
-  }
+	for i := uint(0); i < n; i++ {
+		focus = focus.next
+	}
 	for i := n; i < m; i++ {
-	    newXS.Append(focus.val)
-	    focus = focus.next
-  }
+		newXS.Append(focus.val)
+		focus = focus.next
+	}
 	return newXS
 }
 
@@ -234,18 +236,14 @@ func Repeat(x interface{}, n uint) *ConcurrentList {
 
 func (xs *ConcurrentList) ForEachParallel(f func(interface{}, uint)) {
 	xs.lk.RLock()
-	var idx uint32 = 0
-	wg := &sync.WaitGroup{}
-	wg.Add(int(xs.size))
+	var idx uint = 0
+	js := make([]*job.AsyncJob, xs.size, xs.size)
 	for focus := xs.fst; focus != nil; focus = focus.next {
-		go func(val interface{}, idx uint32) {
-			f(val, uint(idx))
-			wg.Done()
-		}(focus.val, idx)
+		js[idx] = job.NewConsumer(func(args ...interface{}) { f(args[0], args[1].(uint)) }).Start(focus.val, idx)
 		idx++
 	}
 	xs.lk.RUnlock()
-	wg.Wait()
+	job.Await(js...)
 }
 
 func (xs *ConcurrentList) ForEach(f func(interface{}, uint)) {
@@ -259,18 +257,14 @@ func (xs *ConcurrentList) ForEach(f func(interface{}, uint)) {
 }
 
 func (xs *ConcurrentList) MapParallelInPlace(f func(interface{}, uint) interface{}) {
-	var idx uint32 = 0
+	var idx uint = 0
 	xs.lk.Lock()
-	wg := sync.WaitGroup{}
-	wg.Add(int(xs.size))
+	js := make([]*job.AsyncJob, xs.size, xs.size)
 	for focus := xs.fst; focus != nil; focus = focus.next {
-		go func(focus *node, idx uint32) {
-			focus.val = f(focus.val, uint(idx))
-			wg.Done()
-		}(focus, idx)
+		js[idx] = job.NewConsumer(func(args ...interface{}) { focus.val = f(args[0], args[1].(uint)) }).Start(focus.val, idx)
 		idx++
 	}
-	wg.Wait()
+	job.Await(js...)
 	xs.lk.Unlock()
 }
 
@@ -316,21 +310,17 @@ func (xs *ConcurrentList) MapParallel(f func(interface{}, uint) interface{}) *Co
 	}
 	lst := &node{val: f(xs.fst.val, 0)}
 	fst := lst
-	wg := &sync.WaitGroup{}
-	wg.Add(int(xs.size) - 1)
+	js := make([]*job.AsyncJob, xs.size-1, xs.size-1)
 	var idx uint = 1
 	for focus := xs.fst.next; focus != nil; focus = focus.next {
 		lst.next = &node{}
-		go func(lst *node, v interface{}) {
-			lst.val = f(v, idx)
-			wg.Done()
-		}(lst.next, focus.val)
+		js[idx] = job.NewConsumer(func(args ...interface{}) { lst.val = f(args[0], args[1].(uint)) }).Start(lst.next, idx)
 		if focus.next != nil {
 			lst = lst.next
 			idx++
 		}
 	}
-	wg.Wait()
+	job.Await(js...)
 	return &ConcurrentList{
 		fst:  fst,
 		lst:  lst,

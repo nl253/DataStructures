@@ -53,7 +53,7 @@ func TestConcurrentArrayList_Concurrency(t *testing.T) {
 //             } else {
 //                 xs.Append(x)
 //             }
-//             wg.Done()
+//             wg.Running()
 //         }()
 //     }
 //     wg.Wait()

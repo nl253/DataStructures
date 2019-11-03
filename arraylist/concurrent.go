@@ -162,7 +162,7 @@ func (xs *ConcurrentArrayList) FindIdx(pred func(interface{}, uint) bool) int {
 }
 
 // // FIXME
-// func (xs *ConcurrentArrayList) SubList(n uint, m uint) *ConcurrentArrayList {
+// func (xs *ConcurrentArrayList) Slice(n uint, m uint) *ConcurrentArrayList {
 // 	if n == m {
 // 		return New()
 // 	} else if m-n == 1 {
