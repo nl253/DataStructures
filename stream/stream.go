@@ -12,7 +12,8 @@ import (
 
 type Stream struct {
 	closed bool
-	lk     *sync.Mutex
+	bufLk  *sync.Mutex
+	lksLk  *sync.Mutex
 	buf    *list.ConcurrentList
 	lks    *list.ConcurrentList
 }
@@ -23,7 +24,8 @@ var EndMarker = &streamEnd{}
 
 func New(xs ...interface{}) *Stream {
 	s := &Stream{
-		lk:     &sync.Mutex{},
+		bufLk:  &sync.Mutex{},
+		lksLk:  &sync.Mutex{},
 		buf:    list.New(),
 		lks:    list.New(),
 		closed: false,
@@ -34,14 +36,14 @@ func New(xs ...interface{}) *Stream {
 	return s
 }
 
-func From(xs []interface{}) *Stream { return New(xs...) }
+func From(xs []interface{}) *Stream { return New(xs...).Close() }
 
 func Generate(n int, m int, step int, f func(n int) interface{}) *Stream {
 	s := New()
 	for start := n; start < m; start += step {
 		s.PushBack(f(start))
 	}
-	return s
+	return s.Close()
 }
 
 func Range(n int, m int, step int) *Stream {
@@ -64,14 +66,12 @@ func Floats(n int) *Stream {
 func (s *Stream) Map(f func(x interface{}) interface{}) *Stream {
 	newS := New()
 	go func() {
-		for {
-			x := s.Pull()
-			if x == EndMarker {
-				newS.Close()
-				return
-			}
+		for x := s.Pull(); x != EndMarker; x = s.Pull() {
+			// go func(x interface{}) {
 			newS.PushBack(f(x))
+			// }(x)
 		}
+		newS.Close()
 	}()
 	return newS
 }
@@ -157,11 +157,11 @@ func (s *Stream) Scan(init interface{}, f func(x interface{}, y interface{}) int
 	return newS
 }
 
-func (s *Stream) Count(init interface{}, f func(x interface{}, y interface{}) interface{}) uint {
-	return s.Reduce(0, func(x interface{}, y interface{}) interface{} { return x.(uint) + 1 }).Pull().(uint)
+func (s *Stream) Count() uint {
+	return s.Reduce(uint(0), func(x interface{}, y interface{}) interface{} { return x.(uint) + 1 }).Pull().(uint)
 }
 
-func (s *Stream) Sum(init interface{}, f func(x interface{}, y interface{}) interface{}) int {
+func (s *Stream) Sum() int {
 	return s.Reduce(0, func(x interface{}, y interface{}) interface{} { return x.(int) + y.(int) }).Pull().(int)
 }
 
@@ -225,96 +225,161 @@ func Pipeline(s *Stream, ss ...*Stream) *Stream {
 }
 
 func (s *Stream) PushFront(t interface{}) {
-	s.lk.Lock()
+	s.bufLk.Lock()
 	s.buf.Prepend(t)
+	s.bufLk.Unlock()
+	s.lksLk.Lock()
 	if !s.lks.Empty() {
 		l := s.lks.PopFront()
-		s.lk.Unlock()
 		l.(*sync.Mutex).Unlock()
-	} else {
-		s.lk.Unlock()
 	}
+	s.lksLk.Unlock()
 }
 
 func (s *Stream) PushBack(x interface{}) {
-	s.lk.Lock()
+	s.bufLk.Lock()
+	s.buf.Append(x)
+	s.bufLk.Unlock()
+	s.lksLk.Lock()
+	if !s.lks.Empty() {
+		l := s.lks.PopFront()
+		l.(*sync.Mutex).Unlock()
+	}
+	s.lksLk.Unlock()
+}
+
+func (s *Stream) pushBackNotLocked(x interface{}) {
 	s.buf.Append(x)
 	if !s.lks.Empty() {
 		l := s.lks.PopFront()
-		s.lk.Unlock()
 		l.(*sync.Mutex).Unlock()
-	} else {
-		s.lk.Unlock()
 	}
+}
+
+func (s *Stream) BufSize() uint {
+	s.bufLk.Lock()
+	size := s.buf.Size()
+	s.bufLk.Unlock()
+	return size
+}
+
+func (s *Stream) Empty() bool {
+	s.bufLk.Lock()
+	isEmpty := s.buf.Size() == 0 || s.buf.All(func(z interface{}) bool { return z == EndMarker })
+	s.bufLk.Unlock()
+	return isEmpty
 }
 
 func (s *Stream) Pull() interface{} {
-	s.lk.Lock()
+	s.bufLk.Lock()
 	if s.buf.Empty() {
 		if s.closed {
-			s.lk.Unlock()
+			s.bufLk.Unlock()
+			return EndMarker
+		}
+		l := &sync.Mutex{}
+		l.Lock()
+		s.lksLk.Lock()
+		s.lks.Append(l)
+		s.lksLk.Unlock()
+		s.bufLk.Unlock()
+		l.Lock()
+		l.Unlock()
+		s.bufLk.Lock()
+	}
+	front := s.buf.PopFront()
+	s.bufLk.Unlock()
+	return front
+}
+
+func (s *Stream) PullN(n uint) []interface{} {
+	xs := make([]interface{}, n)
+	s.bufLk.Lock()
+	defer s.bufLk.Unlock()
+	for i := uint(0); i < n; i++ {
+		xs[i] = s.pullNoLock()
+	}
+	return xs
+}
+
+func (s *Stream) PullAll() *list.ConcurrentList {
+	xs := list.New()
+	for x := s.Pull(); x != EndMarker; x = s.Pull() {
+		xs.Append(x)
+	}
+	return xs
+}
+
+func (s *Stream) pullNoLock() interface{} {
+	if s.buf.Empty() {
+		if s.closed {
 			return EndMarker
 		}
 		l := &sync.Mutex{}
 		l.Lock()
 		s.lks.Append(l)
-		s.lk.Unlock()
 		l.Lock()
 		l.Unlock()
-		s.lk.Lock()
 	}
-	front := s.buf.PopFront()
-	s.lk.Unlock()
-	return front
+	return s.buf.PopFront()
 }
 
 func (s *Stream) Peek() interface{} {
-	s.lk.Lock()
+	s.bufLk.Lock()
 	if s.buf.Empty() {
 		if s.closed {
-			s.lk.Unlock()
+			s.bufLk.Unlock()
 			return EndMarker
 		}
 		l := &sync.Mutex{}
 		l.Lock()
+		s.lksLk.Lock()
 		s.lks.Append(l)
-		s.lk.Unlock()
+		s.lksLk.Unlock()
+		s.bufLk.Unlock()
 		l.Lock()
 		l.Unlock()
-		s.lk.Lock()
+		s.bufLk.Lock()
 	}
 	front := s.buf.PeekFront()
-	s.lk.Unlock()
+	s.bufLk.Unlock()
 	return front
 }
 
-func (s *Stream) Close() {
-	s.lk.Lock()
+func (s *Stream) Close() *Stream {
 	s.closed = true
-	s.lk.Unlock()
-	s.lks.ForEachParallel(func(l interface{}, _ uint) {
-		s.PushBack(EndMarker)
-	})
-	s.lks.ForEachParallel(func(l interface{}, _ uint) {
-		l.(*sync.Mutex).Unlock()
-	})
+	s.lksLk.Lock()
+	s.bufLk.Lock()
+	s.lks.ForEachParallel(func(_ interface{}, _ uint) { s.pushBackNotLocked(EndMarker) })
+	s.lks.ForEachParallel(func(l interface{}, _ uint) { l.(*sync.Mutex).Unlock() })
+	s.bufLk.Unlock()
+	s.lksLk.Unlock()
+	return s
+}
+
+func (s *Stream) closeNoLock() *Stream {
+	s.bufLk.Lock()
+	s.lksLk.Lock()
+	s.closed = true
+	s.lks.ForEachParallel(func(_ interface{}, _ uint) { s.pushBackNotLocked(EndMarker) })
+	s.lks.ForEachParallel(func(l interface{}, _ uint) { l.(*sync.Mutex).Unlock() })
+	s.bufLk.Unlock()
+	s.lksLk.Unlock()
+	return s
 }
 
 func (s *Stream) Clear() {
-	s.lk.Lock()
+	s.bufLk.Lock()
 	s.buf.Clear()
-	s.lk.Unlock()
+	s.bufLk.Unlock()
 }
 
 func (s *Stream) Drain() *list.ConcurrentList {
-	xs := list.New()
-	for {
-		x := s.Pull()
-		if x == EndMarker {
-			return xs
-		}
-		xs.Append(x)
-	}
+	s.bufLk.Lock()
+	defer s.bufLk.Unlock()
+	saveList := s.buf.TakeWhile(func(x interface{}) bool { return x != EndMarker })
+	s.buf = list.New()
+	return saveList
 }
 
 func (s *Stream) Skip(n uint) {
@@ -335,7 +400,7 @@ func (s *Stream) Eq(x interface{}) bool {
 func (s *Stream) String() string {
 	parts := make([]string, 0)
 	pLk := &sync.RWMutex{}
-	s.lk.Lock()
+	s.bufLk.Lock()
 	s.buf.ForEachParallel(func(x interface{}, idx uint) {
 		go func(x interface{}, idx int) {
 			pLk.Lock()
@@ -352,6 +417,6 @@ func (s *Stream) String() string {
 		}(x, int(idx))
 		idx++
 	})
-	s.lk.Unlock()
+	s.bufLk.Unlock()
 	return fmt.Sprintf("|%s|", strings.Join(parts, " < "))
 }

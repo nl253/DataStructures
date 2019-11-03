@@ -437,6 +437,16 @@ func (xs *ConcurrentList) Eq(_ys interface{}) bool {
 	}
 }
 
+func (xs *ConcurrentList) All(pred func(z interface{}) bool) bool {
+	return !xs.Any(func(z interface{}) bool { return !pred(z) })
+}
+
+func (xs *ConcurrentList) Any(pred func(z interface{}) bool) bool {
+	return xs.Reduce(false, func(x interface{}, y interface{}, idx uint) interface{} {
+		return x.(bool) || pred(y)
+	}).(bool)
+}
+
 func (xs *ConcurrentList) Join(delim string) string {
 	s := xs.ToSlice()
 	n := len(s)
@@ -482,4 +492,34 @@ func (xs *ConcurrentList) String() string {
 	xs.lk.RUnlock()
 	wg.Wait()
 	return fmt.Sprintf("[%s]", strings.Join(parts, " "))
+}
+
+func (xs *ConcurrentList) Filter(pred func(x interface{}) bool) *ConcurrentList {
+	newXS := New()
+	xs.ForEach(func(x interface{}, u uint) {
+		if pred(x) {
+			newXS.Append(x)
+		}
+	})
+	return newXS
+}
+
+func (xs *ConcurrentList) TakeWhile(pred func(x interface{}) bool) *ConcurrentList {
+	newXS := New()
+	ok := true
+	xs.ForEach(func(x interface{}, u uint) {
+		if !ok {
+			return
+		}
+		if ok = pred(x); ok {
+			newXS.Append(x)
+		}
+	})
+	return newXS
+}
+
+func (xs *ConcurrentList) TakeUntil(pred func(x interface{}) bool) *ConcurrentList {
+	return xs.TakeWhile(func(x interface{}) bool {
+		return !pred(x)
+	})
 }
