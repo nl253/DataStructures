@@ -198,21 +198,21 @@ func TestConcurrentList_MapParallel(t *testing.T) {
 	}
 }
 
-// func TestConcurrentList_SubList(t *testing.T) {
-// 	should := fCon("SubList", t)
-// 	should("slice with low bound inc but upbound exc", New(0), func() interface{} {
-// 		return New(0).SubList(0, 1)
-// 	})
-// 	should("slice with low bound inc but upbound exc", New(0), func() interface{} {
-// 		return New(0, 1, 2).SubList(0, 1)
-// 	})
-// 	should("slice with low bound inc but upbound exc", New(0, 1), func() interface{} {
-// 		return New(0, 1, 2).SubList(0, 2)
-// 	})
-// 	should("evaluate to empty list if empty slice (low bound is the same as upper)", New(), func() interface{} {
-// 		return New().SubList(0, 0)
-// 	})
-// }
+func TestConcurrentList_SubList(t *testing.T) {
+	should := fCon("SubList", t)
+	should("slice with low bound inc but upbound exc", New(0), func() interface{} {
+		return New(0).SubList(0, 1)
+	})
+	should("slice with low bound inc but upbound exc", New(0), func() interface{} {
+		return New(0, 1, 2).SubList(0, 1)
+	})
+	should("slice with low bound inc but upbound exc", New(0, 1), func() interface{} {
+		return New(0, 1, 2).SubList(0, 2)
+	})
+	should("evaluate to empty list if empty slice (low bound is the same as upper)", New(), func() interface{} {
+		return New().SubList(0, 0)
+	})
+}
 
 func TestConcurrentList_Append(t *testing.T) {
 	should := fCon("Append", t)

@@ -194,31 +194,23 @@ func (xs *ConcurrentList) FindIdx(pred func(interface{}, uint) bool) int {
 	return idx
 }
 
-// // FIXME
-// func (xs *ConcurrentList) SubList(n uint, m uint) *ConcurrentList {
-// 	if n == m {
-// 		return New()
-// 	} else if m-n == 1 {
-// 		return New(xs.Nth(n))
-// 	}
-// 	xs.lk.Lock()
-// 	fst := xs.fst
-// 	i := uint(0)
-// 	for ; i < n; i++ {
-// 		fst = fst.next
-// 	}
-// 	lst := fst
-// 	for ; i < m-1; i++ {
-// 		lst = lst.next
-// 	}
-// 	defer xs.lk.Unlock()
-// 	return &ConcurrentList{
-// 		fst:  fst,
-// 		lst:  lst,
-// 		size: m - n,
-// 		lk:   &sync.RWMutex{},
-// 	}
-// }
+func (xs *ConcurrentList) SubList(n uint, m uint) *ConcurrentList {
+	if n == m {
+		return New()
+	}
+	xs.lk.RLock()
+	defer xs.lk.RUnlock()
+	newXS := New()
+	focus := xs.fst
+	for i := uint(0) ; i < n; i++ {
+	    focus = focus.next
+  }
+	for i := n; i < m; i++ {
+	    newXS.Append(focus.val)
+	    focus = focus.next
+  }
+	return newXS
+}
 
 func (xs *ConcurrentList) Contains(x interface{}) bool {
 	_, idx := xs.Find(func(y interface{}, _ uint) bool {
