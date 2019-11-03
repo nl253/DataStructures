@@ -237,13 +237,13 @@ func Repeat(x interface{}, n uint) *ConcurrentList {
 func (xs *ConcurrentList) ForEachParallel(f func(interface{}, uint)) {
 	xs.lk.RLock()
 	var idx uint = 0
-	js := make([]*job.AsyncJob, xs.size, xs.size)
+	js := make([]*job.Running, xs.size, xs.size)
 	for focus := xs.fst; focus != nil; focus = focus.next {
 		js[idx] = job.NewConsumer(func(args ...interface{}) { f(args[0], args[1].(uint)) }).Start(focus.val, idx)
 		idx++
 	}
 	xs.lk.RUnlock()
-	job.Await(js...)
+	job.ConsumeRunning(js...)
 }
 
 func (xs *ConcurrentList) ForEach(f func(interface{}, uint)) {
@@ -259,12 +259,12 @@ func (xs *ConcurrentList) ForEach(f func(interface{}, uint)) {
 func (xs *ConcurrentList) MapParallelInPlace(f func(interface{}, uint) interface{}) {
 	var idx uint = 0
 	xs.lk.Lock()
-	js := make([]*job.AsyncJob, xs.size, xs.size)
+	js := make([]*job.Running, xs.size, xs.size)
 	for focus := xs.fst; focus != nil; focus = focus.next {
 		js[idx] = job.NewConsumer(func(args ...interface{}) { focus.val = f(args[0], args[1].(uint)) }).Start(focus.val, idx)
 		idx++
 	}
-	job.Await(js...)
+	job.ConsumeRunning(js...)
 	xs.lk.Unlock()
 }
 
@@ -310,7 +310,7 @@ func (xs *ConcurrentList) MapParallel(f func(interface{}, uint) interface{}) *Co
 	}
 	lst := &node{val: f(xs.fst.val, 0)}
 	fst := lst
-	js := make([]*job.AsyncJob, xs.size-1, xs.size-1)
+	js := make([]*job.Running, xs.size-1, xs.size-1)
 	var idx uint = 1
 	for focus := xs.fst.next; focus != nil; focus = focus.next {
 		lst.next = &node{}
@@ -320,7 +320,7 @@ func (xs *ConcurrentList) MapParallel(f func(interface{}, uint) interface{}) *Co
 			idx++
 		}
 	}
-	job.Await(js...)
+	job.ConsumeRunning(js...)
 	return &ConcurrentList{
 		fst:  fst,
 		lst:  lst,
