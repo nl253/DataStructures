@@ -94,9 +94,9 @@ func TestStream_Range(t *testing.T) {
 }
 
 func TestStream_Drain(t *testing.T) {
-	should := fStream("Drain", t)
-	should("drain internal buffer to list", list.New(1, 4, 1), func() interface{} { return New(1, 4, 1).Drain() })
-	should("drain empty internal buffer to empty list", list.New(), func() interface{} { return New().Drain() })
+	should := fStream("BufDrain", t)
+	should("drain internal buffer to list", list.New(1, 4, 1), func() interface{} { return New(1, 4, 1).BufDrain() })
+	should("drain empty internal buffer to empty list", list.New(), func() interface{} { return New().BufDrain() })
 }
 
 func TestStream_PullAll(t *testing.T) {

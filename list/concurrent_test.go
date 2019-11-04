@@ -338,7 +338,7 @@ func TestConcurrentList_String(t *testing.T) {
 }
 
 func TestConcurrentList_Clear(t *testing.T) {
-	should := fCon("Clear", t)
+	should := fCon("BufClear", t)
 	should("do nothing to empty list", New(), func() interface{} {
 		xs := New()
 		xs.Clear()
