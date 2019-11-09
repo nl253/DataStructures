@@ -46,3 +46,12 @@ func BenchmarkSlice_Nth(b *testing.B) {
 		none(s[n-1])
 	}
 }
+
+func Benchmark_Index_Slice(b *testing.B) {
+	n := uint(100000)
+	s := make([]interface{}, n, n)
+	for i := uint(0); i < n; i++ {
+		none(s[0])
+		s = s[1:]
+	}
+}

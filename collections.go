@@ -1,33 +1,65 @@
 package DataStructures
 
-type ICollection interface {
-	New() *ICollection
-	Clone() *ICollection
+import (
+	"fmt"
+	"io"
+	"time"
+)
+
+type IObject interface {
+	fmt.Stringer
+	New() *IObject
+	Clone() *IObject
+	Eq(interface{}) bool
 }
 
-type ISized interface {
-	ICollection
-	Size() uint
+type IContainer interface {
+	Clear() *IContainer
 	Empty() bool
-}
-
-type IIterable interface {
-	ISized
 	Find(func(interface{}, uint) bool) (interface{}, int)
 	Remove(func(interface{}, uint) bool) (interface{}, int)
 	Contains(interface{}) bool
+	Filter(func(interface{}) bool) *IIterable
+}
+
+type IIterable interface {
+	Size() uint
 	Slice(uint, uint) *IIterable
 	Nth(uint) interface{}
+	ForEach(func(interface{})) *IIterable
+	Flatten() *IIterable
+	Map(func(interface{}) interface{}) *IList
+	Reduce(interface{}, func(interface{}, interface{})) interface{}
+}
+
+type IStack interface {
+	PushFront(interface{})
+	PopFront() interface{}
+	PeekFront() interface{}
+	Tail() *IStack
+}
+
+type IQueue interface {
+	PushBack(interface{})
+	PopBack() interface{}
+	PeekBack() interface{}
+	Init() *IQueue
 }
 
 type IList interface {
+	IContainer
 	IIterable
-	Append(x interface{})
-	Prepend(x interface{})
-	Tail() *IList
-	PopFront() interface{}
-	PeekFront() interface{}
-	Map(func(interface{}) interface{}) *IList
-	ForEach(func(interface{}))
-	Reduce(interface{}, func(interface{}, interface{})) interface{}
+	IStack
+	IQueue
+}
+
+type IStream interface {
+	IObject
+	Tap(func(interface{})) *IStream
+	Map(func(interface{}) interface{}) *IStream
+	Throttle(time.Duration) *IStream
+	Spike(uint, time.Duration) *IStream
+	Log(io.Writer, string) *IStream
+	Printf(string) *IStream
+	Println(string) *IStream
 }

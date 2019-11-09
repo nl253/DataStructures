@@ -107,15 +107,20 @@ func TestStream_PullAll(t *testing.T) {
 
 func TestStream_Count(t *testing.T) {
 	should := fStream("Count", t)
-	should("count elems", uint(10), func() interface{} {
-		return Range(0, 10, 1).Close().Count()
-	})
+	should("count elems", uint(10), func() interface{} { return Natural(10).Count() })
+	should("count elems", uint(0), func() interface{} { return Natural(0).Count() })
+}
+
+func TestStream_Concat(t *testing.T) {
+	should := fStream("Concat", t)
+	should("concat elems", "abc", func() interface{} { return New("a", "b", "c").Close().Concat() })
+	should("concat elems", "", func() interface{} { return RandStrs(10, 20, 0).Close().Concat() })
 }
 
 func TestStream_Sum(t *testing.T) {
 	should := fStream("Sum", t)
-	should("sum many elems", 0+1+2, func() interface{} { return Range(0, 3, 1).Sum() })
-	should("sum 0 elems", 0, func() interface{} { return Range(0, 0, 1).Sum() })
+	should("sum many elems", float64(0+1+2), func() interface{} { return Ints(0, 3).Sum() })
+	should("sum 0 elems", float64(0), func() interface{} { return Ints(0, 0).Sum() })
 }
 
 func TestStream_Map(t *testing.T) {
@@ -131,37 +136,108 @@ func TestStream_Map(t *testing.T) {
 	})
 }
 
-func Benchmark_PushBack(b *testing.B) {
-	n := uint(1000000)
-	s := New()
-	for i := uint(0); i < n; i++ {
-		s.PushBack(i)
-	}
+func TestStream_RandF32s(t *testing.T) {
+	should := fStream("RandF32s", t)
+	should("make stream of f32", true, func() interface{} {
+		return RandF32s(10).PullAll().All(func(x interface{}) bool {
+			switch x.(type) {
+			case float32:
+				return true
+			default:
+				return false
+			}
+		})
+	})
+	should("map 0 elements", list.New(), func() interface{} {
+		return RandF32s(0).PullAll()
+	})
+	should("generate valid stream", true, func() interface{} {
+		return isValid(RandF32s(100))
+	})
 }
 
-func Benchmark_PushFront(b *testing.B) {
-	n := uint(1000000)
-	s := New()
-	for i := uint(0); i < n; i++ {
-		s.PushFront(i)
-	}
+func TestStream_RandF64s(t *testing.T) {
+	should := fStream("RandF64s", t)
+	should("make stream of f64", true, func() interface{} {
+		return RandF64s(10).PullAll().All(func(x interface{}) bool {
+			switch x.(type) {
+			case float64:
+				return true
+			default:
+				return false
+			}
+		})
+	})
+	should("map 0 elements", list.New(), func() interface{} {
+		return RandF64s(0).PullAll()
+	})
+	should("generate valid stream", true, func() interface{} {
+		return isValid(RandF64s(100))
+	})
 }
 
-func Benchmark_Pull(b *testing.B) {
-	n := uint(100000)
-	s := Range(0, int(n), 1)
-	for i := uint(0); i < n; i++ {
-		none(s.Pull())
-	}
+func TestStream_RandInts(t *testing.T) {
+	should := fStream("RandInts", t)
+	should("make stream of ints", true, func() interface{} {
+		return RandInts(-10, 10, 10).PullAll().All(func(x interface{}) bool {
+			switch x.(type) {
+			case int:
+				return true
+			default:
+				return false
+			}
+		})
+	})
+	should("map 0 elements", list.New(), func() interface{} {
+		return RandInts(-100, 100, 0).PullAll()
+	})
+	should("generate valid stream", true, func() interface{} {
+		return isValid(RandInts(0, 100, 10))
+	})
 }
 
-func Benchmark_Index_Slice(b *testing.B) {
-	n := uint(100000)
-	s := make([]interface{}, n, n)
-	for i := uint(0); i < n; i++ {
-		none(s[0])
-		s = s[1:]
-	}
+func TestStream_RandBytes(t *testing.T) {
+	should := fStream("RandBytes", t)
+	should("make stream of bytes", true, func() interface{} {
+		return RandBytes(10).PullAll().All(func(x interface{}) bool {
+			switch x.(type) {
+			case byte:
+				return true
+			default:
+				return false
+			}
+		})
+	})
+	should("map 0 elements", list.New(), func() interface{} {
+		return RandBytes(0).PullAll()
+	})
+	should("generate valid stream", true, func() interface{} {
+		return isValid(RandBytes(10))
+	})
 }
 
-func none(x interface{}) {}
+func TestStream_FromStr(t *testing.T) {
+	should := fStream("FromStr", t)
+	should("make stream of bytes", true, func() interface{} {
+		return FromStr("abc").PullAll().All(func(x interface{}) bool {
+			switch x.(type) {
+			case byte:
+				return true
+			default:
+				return false
+			}
+		})
+	})
+	should("'abc' makes stream of 3 bytes", uint(3), func() interface{} {
+		return FromStr("abc").Count()
+	})
+	should("'abc' makes stream of bytes", list.New(byte('a'), byte('b'), byte('c')), func() interface{} {
+		return FromStr("abc").PullAll()
+	})
+	should("map 0 elements", list.New(), func() interface{} {
+		return FromStr("").PullAll()
+	})
+	should("generate valid stream", true, func() interface{} {
+		return isValid(FromStr("abc")) && isValid(FromStr(""))
+	})
+}

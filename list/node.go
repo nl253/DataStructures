@@ -7,6 +7,15 @@ type node struct {
 	next *node
 }
 
-func (node *node) String() string {
-	return fmt.Sprintf("node %v ->", node.val)
+func (n *node) Eq(x interface{}) bool {
+	switch x.(type) {
+	case *node:
+		return n == x.(*node)
+	default:
+		return false
+	}
+}
+
+func (n *node) String() string {
+	return fmt.Sprintf("node %v ->", n.val)
 }

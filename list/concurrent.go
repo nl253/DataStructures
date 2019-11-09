@@ -26,7 +26,7 @@ func New(xs ...interface{}) *ConcurrentList {
 		lk:   &sync.RWMutex{},
 	}
 	for _, x := range xs {
-		newList.Append(x)
+		newList.PushBack(x)
 	}
 	return newList
 }
@@ -34,7 +34,7 @@ func New(xs ...interface{}) *ConcurrentList {
 func Range(n int, m int, step int) *ConcurrentList {
 	xs := New()
 	for i := n; i < m; i += step {
-		xs.Append(i)
+		xs.PushBack(i)
 	}
 	return xs
 }
@@ -42,7 +42,7 @@ func Range(n int, m int, step int) *ConcurrentList {
 func Generate(n int, m int, f func(int) interface{}) *ConcurrentList {
 	xs := New()
 	for i := n; i < m; i++ {
-		xs.Append(f(i))
+		xs.PushBack(f(i))
 	}
 	return xs
 }
@@ -78,7 +78,7 @@ func (xs *ConcurrentList) Tail() *ConcurrentList {
 	}
 }
 
-func (xs *ConcurrentList) Append(val interface{}) {
+func (xs *ConcurrentList) PushBack(val interface{}) {
 	newNode := &node{val: val, next: nil}
 	xs.lk.Lock()
 	if xs.size == 0 {
@@ -92,7 +92,7 @@ func (xs *ConcurrentList) Append(val interface{}) {
 	xs.lk.Unlock()
 }
 
-func (xs *ConcurrentList) Prepend(val interface{}) {
+func (xs *ConcurrentList) PushFront(val interface{}) {
 	xs.lk.Lock()
 	if xs.size == 0 {
 		newNode := &node{val: val, next: nil}
@@ -206,7 +206,7 @@ func (xs *ConcurrentList) Slice(n uint, m uint) *ConcurrentList {
 		focus = focus.next
 	}
 	for i := n; i < m; i++ {
-		newXS.Append(focus.val)
+		newXS.PushBack(focus.val)
 		focus = focus.next
 	}
 	return newXS
@@ -232,26 +232,28 @@ func Repeat(x interface{}, n uint) *ConcurrentList {
 	})
 }
 
-func (xs *ConcurrentList) ForEachParallel(f func(interface{}, uint)) {
-	xs.lk.RLock()
+func (xs *ConcurrentList) ForEachParallel(f func(interface{}, uint)) *ConcurrentList {
 	var idx uint = 0
+	xs.lk.RLock()
+	defer xs.lk.RUnlock()
 	js := make([]*job.Running, xs.size, xs.size)
 	for focus := xs.fst; focus != nil; focus = focus.next {
 		js[idx] = job.NewConsumer(func(args ...interface{}) { f(args[0], args[1].(uint)) }).Start(focus.val, idx)
 		idx++
 	}
-	xs.lk.RUnlock()
 	job.ConsumeRunning(js...)
+	return xs
 }
 
-func (xs *ConcurrentList) ForEach(f func(interface{}, uint)) {
+func (xs *ConcurrentList) ForEach(f func(interface{}, uint)) *ConcurrentList {
 	var idx uint32 = 0
 	xs.lk.RLock()
+	defer xs.lk.RUnlock()
 	for focus := xs.fst; focus != nil; focus = focus.next {
 		f(focus.val, uint(idx))
 		idx++
 	}
-	xs.lk.RUnlock()
+	return xs
 }
 
 func (xs *ConcurrentList) MapParallelInPlace(f func(interface{}, uint) interface{}) {
@@ -327,12 +329,6 @@ func (xs *ConcurrentList) MapParallel(f func(interface{}, uint) interface{}) *Co
 	}
 }
 
-func (xs *ConcurrentList) Clone() *ConcurrentList {
-	return xs.Map(func(i interface{}, _ uint) interface{} {
-		return i
-	})
-}
-
 func (xs *ConcurrentList) Nth(n uint) interface{} {
 	if n == 0 {
 		return xs.PeekFront()
@@ -373,7 +369,7 @@ func (xs *ConcurrentList) Rotate() *ConcurrentList {
 	defer xs.lk.RUnlock()
 	newList := New()
 	for focus := xs.fst; focus != nil; focus = focus.next {
-		newList.Prepend(focus.val)
+		newList.PushFront(focus.val)
 	}
 	return newList
 }
@@ -387,6 +383,69 @@ func (xs *ConcurrentList) Reduce(init interface{}, f func(x interface{}, y inter
 		idx++
 	}
 	return init
+}
+
+func (xs *ConcurrentList) All(pred func(z interface{}) bool) bool {
+	return !xs.Any(func(z interface{}) bool { return !pred(z) })
+}
+
+func (xs *ConcurrentList) Any(pred func(z interface{}) bool) bool {
+	return xs.Reduce(false, func(x interface{}, y interface{}, idx uint) interface{} {
+		return x.(bool) || pred(y)
+	}).(bool)
+}
+
+func (xs *ConcurrentList) Join(delim string) string {
+	s := xs.ToSlice()
+	n := len(s)
+	parts := make([]string, n, n)
+	for idx, x := range s {
+		parts[idx] = x.(string)
+	}
+	return strings.Join(parts, delim)
+}
+
+func (xs *ConcurrentList) ToSlice() []interface{} {
+	var idx uint = 0
+	xs.lk.RLock()
+	n := xs.size
+	parts := make([]interface{}, n, n)
+	for focus := xs.fst; focus != nil; focus = focus.next {
+		parts[idx] = focus.val
+		idx++
+	}
+	xs.lk.RUnlock()
+	return parts
+}
+
+func (xs *ConcurrentList) Filter(pred func(x interface{}) bool) *ConcurrentList {
+	newXS := New()
+	xs.ForEach(func(x interface{}, u uint) {
+		if pred(x) {
+			newXS.PushBack(x)
+		}
+	})
+	return newXS
+}
+
+func (xs *ConcurrentList) TakeWhile(pred func(x interface{}) bool) *ConcurrentList {
+	newXS := New()
+	ok := true
+	xs.ForEach(func(x interface{}, u uint) {
+		if !ok {
+			return
+		}
+		if ok = pred(x); ok {
+			newXS.PushBack(x)
+		}
+	})
+	return newXS
+}
+
+func (xs *ConcurrentList) TakeUntil(pred func(x interface{}) bool) *ConcurrentList {
+	return xs.TakeWhile(func(x interface{}) bool {
+		return !pred(x)
+	})
 }
 
 func (xs *ConcurrentList) Eq(_ys interface{}) bool {
@@ -425,37 +484,10 @@ func (xs *ConcurrentList) Eq(_ys interface{}) bool {
 	}
 }
 
-func (xs *ConcurrentList) All(pred func(z interface{}) bool) bool {
-	return !xs.Any(func(z interface{}) bool { return !pred(z) })
-}
-
-func (xs *ConcurrentList) Any(pred func(z interface{}) bool) bool {
-	return xs.Reduce(false, func(x interface{}, y interface{}, idx uint) interface{} {
-		return x.(bool) || pred(y)
-	}).(bool)
-}
-
-func (xs *ConcurrentList) Join(delim string) string {
-	s := xs.ToSlice()
-	n := len(s)
-	parts := make([]string, n, n)
-	for idx, x := range s {
-		parts[idx] = x.(string)
-	}
-	return strings.Join(parts, delim)
-}
-
-func (xs *ConcurrentList) ToSlice() []interface{} {
-	var idx uint = 0
-	xs.lk.RLock()
-	n := xs.size
-	parts := make([]interface{}, n, n)
-	for focus := xs.fst; focus != nil; focus = focus.next {
-		parts[idx] = focus.val
-		idx++
-	}
-	xs.lk.RUnlock()
-	return parts
+func (xs *ConcurrentList) Clone() *ConcurrentList {
+	return xs.Map(func(i interface{}, _ uint) interface{} {
+		return i
+	})
 }
 
 func (xs *ConcurrentList) String() string {
@@ -474,34 +506,4 @@ func (xs *ConcurrentList) String() string {
 	}
 	xs.lk.RUnlock()
 	return fmt.Sprintf("[%s]", strings.Join(parts, " "))
-}
-
-func (xs *ConcurrentList) Filter(pred func(x interface{}) bool) *ConcurrentList {
-	newXS := New()
-	xs.ForEach(func(x interface{}, u uint) {
-		if pred(x) {
-			newXS.Append(x)
-		}
-	})
-	return newXS
-}
-
-func (xs *ConcurrentList) TakeWhile(pred func(x interface{}) bool) *ConcurrentList {
-	newXS := New()
-	ok := true
-	xs.ForEach(func(x interface{}, u uint) {
-		if !ok {
-			return
-		}
-		if ok = pred(x); ok {
-			newXS.Append(x)
-		}
-	})
-	return newXS
-}
-
-func (xs *ConcurrentList) TakeUntil(pred func(x interface{}) bool) *ConcurrentList {
-	return xs.TakeWhile(func(x interface{}) bool {
-		return !pred(x)
-	})
 }

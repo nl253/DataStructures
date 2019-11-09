@@ -91,9 +91,9 @@ func TestConcurrentList_ConcurrencyDoesntLooseData(t *testing.T) {
 		m.Store(i, x)
 		go func() {
 			if rand.Intn(2) == 1 {
-				xs.Prepend(x)
+				xs.PushFront(x)
 			} else {
-				xs.Append(x)
+				xs.PushBack(x)
 			}
 			wg.Done()
 		}()
@@ -199,7 +199,7 @@ func TestConcurrentList_MapParallel(t *testing.T) {
 }
 
 func TestConcurrentList_SubList(t *testing.T) {
-	should := fCon("Slice", t)
+	should := fCon("Take", t)
 	should("slice with low bound inc but upbound exc", New(0), func() interface{} {
 		return New(0).Slice(0, 1)
 	})
@@ -215,51 +215,51 @@ func TestConcurrentList_SubList(t *testing.T) {
 }
 
 func TestConcurrentList_Append(t *testing.T) {
-	should := fCon("Append", t)
+	should := fCon("PushBack", t)
 	should("add item to back", New(0), func() interface{} {
 		xs := New()
-		xs.Append(0)
+		xs.PushBack(0)
 		return xs
 	})
 	should("add item to back", New(1, 0), func() interface{} {
 		xs := New(1)
-		xs.Append(0)
+		xs.PushBack(0)
 		return xs
 	})
 	for _, xs := range []*ConcurrentList{New(), New(1, 2, 3), Ints(-10, 10, 10), Floats(10), Bytes(10), Chars(10), Range(0, 10, 1), Range(-10, 10, 2)} {
 		should("produce valid list", true, func() interface{} {
-			xs.Append(rand.Int())
-			xs.Append(rand.Float64())
-			xs.Append(rand.Float32())
+			xs.PushBack(rand.Int())
+			xs.PushBack(rand.Float64())
+			xs.PushBack(rand.Float32())
 			return isValid(xs)
 		})
 	}
 }
 
 func TestConcurrentList_Prepend(t *testing.T) {
-	should := fCon("Prepend", t)
+	should := fCon("PushFront", t)
 	should("add item to front", New(0), func() interface{} {
 		xs := New()
-		xs.Prepend(0)
+		xs.PushFront(0)
 		return xs
 	})
 	should("add item to front", New(0, 1), func() interface{} {
 		xs := New(1)
-		xs.Prepend(0)
+		xs.PushFront(0)
 		return xs
 	})
 	for _, xs := range []*ConcurrentList{New(), New(1, 2, 3), Ints(-10, 10, 10), Floats(10), Bytes(10), Chars(10), Range(0, 10, 1), Range(-10, 10, 2)} {
 		should("produce valid list", true, func() interface{} {
-			xs.Prepend(rand.Int())
-			xs.Prepend(rand.Float64())
-			xs.Prepend(rand.Float32())
+			xs.PushFront(rand.Int())
+			xs.PushFront(rand.Float64())
+			xs.PushFront(rand.Float32())
 			return isValid(xs)
 		})
 	}
 }
 
 func TestConcurrentList_PopFront(t *testing.T) {
-	should := fCon("PopFront", t)
+	should := fCon("Pull", t)
 	should("remove 0th item", New(), func() interface{} {
 		xs := New(0)
 		xs.PopFront()
@@ -301,12 +301,12 @@ func TestConcurrentList_Generate(t *testing.T) {
 }
 
 func TestConcurrentList_Tail(t *testing.T) {
-	should := fCon("Tail", t)
+	should := fCon("Skip", t)
 	should("return all but 0th elements", New(), func() interface{} { return New(0).Tail() })
 }
 
 func TestConcurrentList_PeekFront(t *testing.T) {
-	should := fCon("PeekFront", t)
+	should := fCon("Peek", t)
 	should("return 0th element", 0, func() interface{} { return New(0).PeekFront() })
 }
 

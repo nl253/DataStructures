@@ -24,7 +24,7 @@ func BenchmarkConcurrentList_Append(b *testing.B) {
 	n := N
 	s := New()
 	for i := uint(0); i < n; i++ {
-		s.Append(i)
+		s.PushBack(i)
 	}
 }
 
@@ -32,7 +32,7 @@ func BenchmarkConcurrentList_Prepend(b *testing.B) {
 	n := N
 	s := New()
 	for i := uint(0); i < n; i++ {
-		s.Prepend(i)
+		s.PushFront(i)
 	}
 }
 

@@ -6,7 +6,7 @@ const N uint = 1000000
 
 func BenchmarkStream_Pull(b *testing.B) {
 	n := N
-	s := Ints(0, 100, n)
+	s := RandInts(0, 100, n)
 	for i := 0; i < 1000; i++ {
 		s.Pull()
 	}
@@ -14,9 +14,9 @@ func BenchmarkStream_Pull(b *testing.B) {
 
 func BenchmarkStream_Peek(b *testing.B) {
 	n := N
-	s := Ints(0, 100, n)
+	s := RandInts(0, 100, n)
 	for i := 0; i < 1000; i++ {
-		s.Peek()
+		s.PeekFront()
 	}
 }
 

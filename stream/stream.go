@@ -2,7 +2,9 @@ package stream
 
 import (
 	"fmt"
+	"io"
 	"math/rand"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -49,7 +51,20 @@ func New(xs ...interface{}) *Stream {
 	return s
 }
 
-func From(xs []interface{}) *Stream { return New(xs...) }
+func Pipeline(ss ...*Stream) *Stream {
+	acc := New()
+	for _, s := range ss {
+		acc.PushBack(s)
+	}
+	return acc.Reduce(New(), func(acc interface{}, _other interface{}) interface{} {
+		other := _other.(*Stream)
+		go func() {
+			acc.(*Stream).forEach(func(x interface{}) { other.PushBack(x) })
+			other.Close()
+		}()
+		return other
+	}).(*Stream)
+}
 
 func Generate(n int, m int, step int, f func(n int) interface{}) *Stream {
 	s := New()
@@ -62,25 +77,111 @@ func Generate(n int, m int, step int, f func(n int) interface{}) *Stream {
 	return s
 }
 
-func Range(n int, m int, step int) *Stream {
-	return Generate(n, m, step, func(x int) interface{} { return x })
+func FromSlice(xs []interface{}) *Stream { return New(xs...) }
+
+func FromSliceSubslice(s []interface{}, n uint) *Stream {
+	m := int(n)
+	return Generate(0, len(s), int(n), func(state int) interface{} { return s[state : state+m] })
 }
 
-func Ints(min int, max int, n uint) *Stream {
+func FromFile(filePath string) *Stream {
+	file, e := os.Open(filePath)
+	if e != nil {
+		panic(fmt.Sprintf("[ERROR] failed to open file - %s", e.Error()))
+	}
+	s := New()
+	buf := make([]byte, 1, 1)
+	off := int64(0)
+	go func() {
+		for _, err := file.ReadAt(buf, off); err != io.EOF; _, err = file.ReadAt(buf, off) {
+			s.PushBack(buf[0])
+			off++
+		}
+		s.Close()
+	}()
+	return s
+}
+
+func FromFileSplit(filePath string, delim byte) *Stream {
+	s := FromFile(filePath)
+	newS := New()
+	go func() {
+		sb := strings.Builder{}
+		for !s.Closed() {
+			if b := s.Pull().(byte); b == delim {
+				newS.PushBack(sb.String())
+				sb = strings.Builder{}
+			} else {
+				sb.WriteByte(b)
+			}
+		}
+		s.Close()
+	}()
+	return newS
+}
+
+func FromFileLines(filePath string) *Stream {
+	return FromFileSplit(filePath, '\n')
+}
+
+func FromStr(s string) *Stream {
+	return Generate(0, len(s), 1, func(n int) interface{} { return s[n] })
+}
+
+func FromStrSubstr(s string, n uint) *Stream {
+	m := int(n)
+	return Generate(0, len(s), int(n), func(state int) interface{} { return s[state : state+m] })
+}
+
+func Range(lowBound int, upBound int, step int) *Stream {
+	return Generate(lowBound, upBound, step, func(n int) interface{} { return n })
+}
+
+func Natural(n uint) *Stream {
+	s := New()
+	go func() {
+		for start := uint(0); start < n; start++ {
+			s.PushBack(start)
+		}
+		s.Close()
+	}()
+	return s
+}
+
+func Ints(lowBound int, upBound int) *Stream {
+	return Range(lowBound, upBound, 1)
+}
+
+func RandInts(min int, max int, n uint) *Stream {
 	r := max - min
 	return Generate(0, int(n), 1, func(x int) interface{} { return min + rand.Intn(r) })
 }
 
-func Bytes(n int) *Stream {
+func RandBytes(n int) *Stream {
 	return Generate(0, n, 1, func(x int) interface{} { return byte(rand.Intn(256)) })
 }
 
-func Floats(n int) *Stream {
+func RandStrs(min uint, max uint, n int) *Stream {
+	return Generate(0, n, 1, func(_ int) interface{} {
+		sb := strings.Builder{}
+		end := uint(rand.Intn(int(max)))
+		for i := min; i < end; i++ {
+			sb.WriteRune(33 + rand.Int31n(95))
+		}
+		return sb.String()
+	})
+}
+
+func RandF64s(n int) *Stream {
 	return Generate(0, n, 1, func(x int) interface{} { return rand.Float64() })
 }
 
+func RandF32s(n int) *Stream {
+	return Generate(0, n, 1, func(x int) interface{} { return rand.Float32() })
+}
+
 func Replicate(n uint, xs ...interface{}) *Stream {
-	return Repeat(n, From(xs)).Flatten()
+	return Repeat(n, FromSlice(xs)).Flatten()
 }
 
 func Repeat(n uint, x interface{}) *Stream {
@@ -106,7 +207,7 @@ func Emit(freq time.Duration, f func(n uint) interface{}) *Stream {
 
 func (s *Stream) PushFront(t interface{}) {
 	s.bufLk.Lock()
-	s.buf.Prepend(t)
+	s.buf.PushFront(t)
 	s.lksLk.Lock()
 	if !s.lks.Empty() {
 		l := s.lks.PopFront()
@@ -118,7 +219,7 @@ func (s *Stream) PushFront(t interface{}) {
 
 func (s *Stream) PushBack(x interface{}) {
 	s.bufLk.Lock()
-	s.buf.Append(x)
+	s.buf.PushBack(x)
 	s.lksLk.Lock()
 	if !s.lks.Empty() {
 		s.lks.PopFront().(*sync.Mutex).Unlock()
@@ -139,7 +240,7 @@ func (s *Stream) Pull() interface{} {
 			l := &sync.Mutex{}
 			l.Lock()
 			s.lksLk.Lock()
-			s.lks.Append(l)
+			s.lks.PushBack(l)
 			s.lksLk.Unlock()
 			l.Lock()
 			l.Unlock()
@@ -161,12 +262,12 @@ func (s *Stream) PullN(n uint) []interface{} {
 
 func (s *Stream) PullAll() *list.ConcurrentList {
 	return s.Reduce(list.New(), func(acc interface{}, x interface{}) interface{} {
-		acc.(*list.ConcurrentList).Append(x)
+		acc.(*list.ConcurrentList).PushBack(x)
 		return acc
 	}).(*list.ConcurrentList)
 }
 
-func (s *Stream) Peek() interface{} {
+func (s *Stream) PeekFront() interface{} {
 	for {
 		s.bufLk.Lock()
 		if s.buf.Empty() {
@@ -177,7 +278,7 @@ func (s *Stream) Peek() interface{} {
 			l := &sync.Mutex{}
 			l.Lock()
 			s.lksLk.Lock()
-			s.lks.Append(l)
+			s.lks.PushBack(l)
 			s.lksLk.Unlock()
 			s.bufLk.Unlock()
 			l.Lock()
@@ -202,7 +303,7 @@ func (s *Stream) Close() *Stream {
 	return s
 }
 
-func (s *Stream) ForEach(f func(x interface{})) {
+func (s *Stream) forEach(f func(x interface{})) {
 	for x := s.Pull(); x != EndMarker; x = s.Pull() {
 		f(x)
 	}
@@ -211,17 +312,36 @@ func (s *Stream) ForEach(f func(x interface{})) {
 func (s *Stream) Map(f func(x interface{}) interface{}) *Stream {
 	newS := New()
 	go func() {
-		s.ForEach(func(x interface{}) { newS.PushBack(f(x)) })
+		s.forEach(func(x interface{}) { newS.PushBack(f(x)) })
 		newS.Close()
 	}()
 	return newS
 }
 
-func (s *Stream) Tap(f func(x interface{})) *Stream {
+func (s *Stream) ForEach(f func(x interface{})) *Stream {
 	return s.Map(func(x interface{}) interface{} {
 		f(x)
 		return x
 	})
+}
+
+func (s *Stream) Log(writer io.Writer, format string) *Stream {
+	return s.ForEach(func(x interface{}) {
+		if _, err := fmt.Fprintf(writer, format, x); err != nil {
+			if writer != os.Stdout {
+				fmt.Printf("[ERROR] %s", err.Error())
+			}
+			_, _ = fmt.Fprintf(writer, "[ERROR] %s", err.Error())
+		}
+	})
+}
+
+func (s *Stream) Printf(format string) *Stream {
+	return s.Log(os.Stdout, format)
+}
+
+func (s *Stream) Println(format string) *Stream {
+	return s.Printf("%v\n")
 }
 
 func (s *Stream) Throttle(d time.Duration) *Stream {
@@ -285,8 +405,8 @@ func (s *Stream) Filter(f func(x interface{}) bool) *Stream {
 func (s *Stream) Flatten() *Stream {
 	newS := New()
 	go func() {
-		s.ForEach(func(x interface{}) {
-			x.(*Stream).ForEach(func(y interface{}) {
+		s.forEach(func(x interface{}) {
+			x.(*Stream).forEach(func(y interface{}) {
 				newS.PushBack(y)
 			})
 		})
@@ -298,10 +418,10 @@ func (s *Stream) Flatten() *Stream {
 func (s *Stream) FlattenDeep() *Stream {
 	newS := New()
 	go func() {
-		s.ForEach(func(x interface{}) {
+		s.forEach(func(x interface{}) {
 			switch x.(type) {
 			case *Stream:
-				x.(*Stream).ForEach(func(y interface{}) { s.PushBack(y) })
+				x.(*Stream).forEach(func(y interface{}) { s.PushBack(y) })
 			default:
 				newS.PushBack(x)
 			}
@@ -330,30 +450,11 @@ func (s *Stream) TakeWhile(f func(x interface{}) bool) *Stream {
 	return s.TakeUntil(func(x interface{}) bool { return !f(x) })
 }
 
-func (s *Stream) pipe(other *Stream) *Stream {
-	go func() {
-		s.ForEach(func(x interface{}) { other.PushBack(x) })
-		other.Close()
-	}()
-	return other
+func (s *Stream) Pipe(other *Stream) *Stream {
+	return Pipeline(s, other)
 }
 
-func Pipeline(ss ...*Stream) *Stream {
-	acc := New()
-	for _, s := range ss {
-		acc.PushBack(s)
-	}
-	return acc.Reduce(New(), func(acc interface{}, _other interface{}) interface{} {
-		other := _other.(*Stream)
-		go func() {
-			acc.(*Stream).ForEach(func(x interface{}) { other.PushBack(x) })
-			other.Close()
-		}()
-		return other
-	}).(*Stream)
-}
-
-func (s *Stream) Closed() bool { return s.Peek() == EndMarker }
+func (s *Stream) Closed() bool { return s.PeekFront() == EndMarker }
 
 func (s *Stream) Take(n uint) *Stream {
 	newS := New()
@@ -371,18 +472,22 @@ func (s *Stream) Take(n uint) *Stream {
 	return newS
 }
 
-func (s *Stream) Skip(n uint) *Stream {
+func (s *Stream) Skip() *Stream {
+	return s.SkipN(1)
+}
+
+func (s *Stream) SkipN(n uint) *Stream {
 	newS := New()
 	go func() {
 		s.Take(n).PullAll()
-		s.ForEach(func(x interface{}) { newS.PushBack(x) })
+		s.forEach(func(x interface{}) { newS.PushBack(x) })
 		newS.Close()
 	}()
 	return newS
 }
 
 func (s *Stream) Reduce(init interface{}, f func(acc interface{}, x interface{}) interface{}) interface{} {
-	s.ForEach(func(x interface{}) { init = f(init, x) })
+	s.forEach(func(x interface{}) { init = f(init, x) })
 	return init
 }
 
@@ -397,8 +502,23 @@ func (s *Stream) Count() uint {
 	return s.Reduce(uint(0), func(x interface{}, y interface{}) interface{} { return x.(uint) + 1 }).(uint)
 }
 
-func (s *Stream) Sum() int {
-	return s.Reduce(0, func(x interface{}, y interface{}) interface{} { return x.(int) + y.(int) }).(int)
+func (s *Stream) Sum() float64 {
+	switch s.PeekFront().(type) {
+	case int:
+		return float64(s.Reduce(0, func(x interface{}, y interface{}) interface{} { return x.(int) + y.(int) }).(int))
+	case int64:
+		return float64(s.Reduce(int64(0), func(x interface{}, y interface{}) interface{} { return x.(int64) + y.(int64) }).(int64))
+	case int32:
+		return float64(s.Reduce(int32(0), func(x interface{}, y interface{}) interface{} { return x.(int32) + y.(int32) }).(int32))
+	case float32:
+		return float64(s.Reduce(float32(0), func(x interface{}, y interface{}) interface{} { return x.(float32) + y.(float32) }).(float32))
+	case float64:
+		return s.Reduce(float64(0), func(x interface{}, y interface{}) interface{} { return x.(float64) + y.(float64) }).(float64)
+	case uint:
+		return float64(s.Reduce(uint(0), func(x interface{}, y interface{}) interface{} { return x.(uint) + y.(uint) }).(uint))
+	default:
+		return 0
+	}
 }
 
 func (s *Stream) Concat() string {
