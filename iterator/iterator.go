@@ -86,7 +86,7 @@ func Range(initState int, step int) *Iterator {
 	return New(initState, func(i interface{}) interface{} { return i.(int) + step })
 }
 
-func Natural() *Iterator {
+func Nats() *Iterator {
 	return New(0, func(i interface{}) interface{} { return i.(int) + 1 })
 }
 
