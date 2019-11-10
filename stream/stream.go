@@ -145,7 +145,7 @@ func Linear(lowBound float64, upBound float64, n uint) *Stream {
 	return s
 }
 
-func Natural(n uint) *Stream {
+func Nats(n uint) *Stream {
 	s := New()
 	go func() {
 		for start := uint(0); start < n; start++ {
@@ -162,19 +162,19 @@ func Ints(lowBound int, upBound int) *Stream {
 
 func RandInts(min int, max int, n uint) *Stream {
 	r := max - min
-	return Natural(n).Map(func(_ interface{}) interface{} {
+	return Nats(n).Map(func(_ interface{}) interface{} {
 		return min + rand.Intn(r)
 	})
 }
 
 func RandBytes(n uint) *Stream {
-	return Natural(n).Map(func(x interface{}) interface{} {
+	return Nats(n).Map(func(x interface{}) interface{} {
 		return byte(rand.Intn(256))
 	})
 }
 
 func RandStrs(min uint, max uint, n uint) *Stream {
-	return Natural(n).Map(func(_ interface{}) interface{} {
+	return Nats(n).Map(func(_ interface{}) interface{} {
 		sb := strings.Builder{}
 		end := uint(rand.Intn(int(max)))
 		for i := min; i < end; i++ {
@@ -207,7 +207,7 @@ func Tick(freq time.Duration, n uint, x interface{}) *Stream {
 }
 
 func Emit(freq time.Duration, count uint, f func(n uint) interface{}) *Stream {
-	return Natural(count).Map(func(x interface{}) interface{} {
+	return Nats(count).Map(func(x interface{}) interface{} {
 		time.Sleep(freq)
 		return f(x.(uint))
 	})

@@ -108,8 +108,8 @@ func TestStream_PullAll(t *testing.T) {
 
 func TestStream_Count(t *testing.T) {
 	should := fStream("Count", t)
-	should("count elems", uint(10), func() interface{} { return Natural(10).Count() })
-	should("count elems", uint(0), func() interface{} { return Natural(0).Count() })
+	should("count elems", uint(10), func() interface{} { return Nats(10).Count() })
+	should("count elems", uint(0), func() interface{} { return Nats(0).Count() })
 }
 
 func TestStream_Concat(t *testing.T) {
