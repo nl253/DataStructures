@@ -121,7 +121,7 @@ func (iter *Iterator) Take(n uint) *Iterator {
 			return EndOfIteration
 		} else {
 			n--
-			return iter.pull()
+			return iter.Pull()
 		}
 	})
 }
@@ -185,6 +185,14 @@ func (iter *Iterator) PullAll() *list.ConcurrentList {
 		result.PushBack(iter.pull())
 	}
 	return result
+}
+
+func (iter *Iterator) Consume() {
+	iter.lk.Lock()
+	defer iter.lk.Unlock()
+	for iter.state != EndOfIteration {
+		iter.skip()
+	}
 }
 
 func (iter *Iterator) Skip() *Iterator {

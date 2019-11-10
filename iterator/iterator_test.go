@@ -54,11 +54,11 @@ func TestIterator_Sum(t *testing.T) {
 	})
 }
 
-func TestIterator_Tap(t *testing.T) {
-	should := fIter("forEach", t)
-	should("tap to print", 2, func() interface{} {
-		return Ints().Take(2).Map(func(i interface{}) interface{} {
-			return 0
+func TestIterator_ForEach(t *testing.T) {
+	should := fIter("ForEach", t)
+	should("sum", 0, func() interface{} {
+		return Ints().Take(0).Close().Map(func(i interface{}) interface{} {
+			return 1
 		}).Sum()
 	})
 }

@@ -326,7 +326,7 @@ func (s *Stream) Map(f func(x interface{}) interface{}) *Stream {
 	return newS
 }
 
-func (s *Stream) Stringify(f func(x interface{}) interface{}) *Stream {
+func (s *Stream) Stringify() *Stream {
 	return s.Map(func(x interface{}) interface{} {
 		switch x.(type) {
 		case fmt.Stringer:
@@ -344,7 +344,7 @@ func (s *Stream) ForEach(f func(x interface{})) *Stream {
 	})
 }
 
-func (s *Stream) Wait() {
+func (s *Stream) Consume() {
 	s.forEach(func(x interface{}) {})
 }
 
@@ -365,6 +365,10 @@ func (s *Stream) Printf(format string) *Stream {
 
 func (s *Stream) Println() *Stream {
 	return s.Printf("%v\n")
+}
+
+func (s *Stream) Sprintf(format string) *Stream {
+	return s.Map(func(x interface{}) interface{} { return fmt.Sprintf(format, x.(string)) })
 }
 
 func (s *Stream) Throttle(d time.Duration) *Stream {
@@ -456,7 +460,7 @@ func (s *Stream) FlattenDeep() *Stream {
 }
 
 func (s *Stream) FlatMap(f func(x interface{}) *Stream) *Stream {
-	return s.Map(func(x interface{}) interface{} { return f(x) }).Flatten()
+	return s.Map(func(x interface{}) interface{} { return f(x) }).FlattenDeep()
 }
 
 func (s *Stream) TakeUntil(f func(x interface{}) bool) *Stream {
@@ -552,8 +556,8 @@ func (s *Stream) Concat() string {
 }
 
 func (s *Stream) Join(delim string) string {
-	str := s.Reduce("", func(x interface{}, y interface{}) interface{} { return x.(string) + delim }).(string)
-	return str[:len(str)-len(delim)]
+	str := s.Reduce("", func(x interface{}, y interface{}) interface{} { return x.(string) + delim + y.(string) }).(string)
+	return str
 }
 
 func (s *Stream) BufSize() uint {
