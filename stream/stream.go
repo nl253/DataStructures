@@ -56,13 +56,9 @@ func Pipeline(ss ...*Stream) *Stream {
 	for _, s := range ss {
 		acc.PushBack(s)
 	}
-	return acc.Reduce(New(), func(acc interface{}, _other interface{}) interface{} {
-		other := _other.(*Stream)
-		go func() {
-			acc.(*Stream).forEach(func(x interface{}) { other.PushBack(x) })
-			other.Close()
-		}()
-		return other
+	acc.Close()
+	return acc.Reduce(New(), func(acc interface{}, other interface{}) interface{} {
+		return acc.(*Stream).Pipe(other.(*Stream))
 	}).(*Stream)
 }
 
@@ -137,6 +133,18 @@ func Range(lowBound int, upBound int, step int) *Stream {
 	return Generate(lowBound, upBound, step, func(n int) interface{} { return n })
 }
 
+func Linear(lowBound float64, upBound float64, n uint) *Stream {
+	s := New()
+	go func() {
+		step := (upBound - lowBound) / float64(n)
+		for start := lowBound; start < upBound; start += step {
+			s.PushBack(start)
+		}
+		s.Close()
+	}()
+	return s
+}
+
 func Natural(n uint) *Stream {
 	s := New()
 	go func() {
@@ -154,15 +162,19 @@ func Ints(lowBound int, upBound int) *Stream {
 
 func RandInts(min int, max int, n uint) *Stream {
 	r := max - min
-	return Generate(0, int(n), 1, func(x int) interface{} { return min + rand.Intn(r) })
+	return Natural(n).Map(func(_ interface{}) interface{} {
+		return min + rand.Intn(r)
+	})
 }
 
-func RandBytes(n int) *Stream {
-	return Generate(0, n, 1, func(x int) interface{} { return byte(rand.Intn(256)) })
+func RandBytes(n uint) *Stream {
+	return Natural(n).Map(func(x interface{}) interface{} {
+		return byte(rand.Intn(256))
+	})
 }
 
-func RandStrs(min uint, max uint, n int) *Stream {
-	return Generate(0, n, 1, func(_ int) interface{} {
+func RandStrs(min uint, max uint, n uint) *Stream {
+	return Natural(n).Map(func(_ interface{}) interface{} {
 		sb := strings.Builder{}
 		end := uint(rand.Intn(int(max)))
 		for i := min; i < end; i++ {
@@ -185,24 +197,20 @@ func Replicate(n uint, xs ...interface{}) *Stream {
 }
 
 func Repeat(n uint, x interface{}) *Stream {
-	return Generate(int(0), int(n), 1, func(n int) interface{} {
+	return Generate(0, int(n), 1, func(n int) interface{} {
 		return x
 	})
 }
 
-func Tick(freq time.Duration, x interface{}) *Stream {
-	return Emit(freq, func(_ uint) interface{} { return x })
+func Tick(freq time.Duration, n uint, x interface{}) *Stream {
+	return Emit(freq, n, func(_ uint) interface{} { return x })
 }
 
-func Emit(freq time.Duration, f func(n uint) interface{}) *Stream {
-	s := New()
-	go func() {
-		for n := uint(0); ; n++ {
-			s.PushBack(f(n))
-			time.Sleep(freq)
-		}
-	}()
-	return s
+func Emit(freq time.Duration, count uint, f func(n uint) interface{}) *Stream {
+	return Natural(count).Map(func(x interface{}) interface{} {
+		time.Sleep(freq)
+		return f(x.(uint))
+	})
 }
 
 func (s *Stream) PushFront(t interface{}) {
@@ -318,6 +326,17 @@ func (s *Stream) Map(f func(x interface{}) interface{}) *Stream {
 	return newS
 }
 
+func (s *Stream) Stringify(f func(x interface{}) interface{}) *Stream {
+	return s.Map(func(x interface{}) interface{} {
+		switch x.(type) {
+		case fmt.Stringer:
+			return x.(fmt.Stringer).String()
+		default:
+			return fmt.Sprintf("%v", x)
+		}
+	})
+}
+
 func (s *Stream) ForEach(f func(x interface{})) *Stream {
 	return s.Map(func(x interface{}) interface{} {
 		f(x)
@@ -340,7 +359,7 @@ func (s *Stream) Printf(format string) *Stream {
 	return s.Log(os.Stdout, format)
 }
 
-func (s *Stream) Println(format string) *Stream {
+func (s *Stream) Println() *Stream {
 	return s.Printf("%v\n")
 }
 
@@ -368,19 +387,24 @@ func (s *Stream) Spike(n uint, d time.Duration) *Stream {
 }
 
 func (s *Stream) Delay(d time.Duration) *Stream {
-	return Pipeline(New(EndMarker).Throttle(d), s)
+	newS := New()
+	go func() {
+		time.Sleep(d)
+		s.forEach(func(x interface{}) { newS.PushBack(x) })
+		newS.Close()
+	}()
+	return newS
 }
 
 func (s *Stream) Broadcast(ss ...*Stream) *Stream {
-	return s.Map(func(x interface{}) interface{} {
+	return s.ForEach(func(x interface{}) {
 		for _, s := range ss {
 			s.PushBack(x)
 		}
-		return x
 	})
 }
 
-func (s *Stream) Duplicate(n uint) []*Stream {
+func (s *Stream) Tee(n uint) []*Stream {
 	ss := make([]*Stream, n)
 	for i := uint(0); i < n; i++ {
 		ss[i] = New()
@@ -392,11 +416,11 @@ func (s *Stream) Duplicate(n uint) []*Stream {
 func (s *Stream) Filter(f func(x interface{}) bool) *Stream {
 	newS := New()
 	go func() {
-		for x := s.Pull(); x != EndMarker; x = s.Pull() {
+		s.forEach(func(x interface{}) {
 			if f(x) {
 				newS.PushBack(x)
 			}
-		}
+		})
 		newS.Close()
 	}()
 	return newS
@@ -405,11 +429,7 @@ func (s *Stream) Filter(f func(x interface{}) bool) *Stream {
 func (s *Stream) Flatten() *Stream {
 	newS := New()
 	go func() {
-		s.forEach(func(x interface{}) {
-			x.(*Stream).forEach(func(y interface{}) {
-				newS.PushBack(y)
-			})
-		})
+		s.forEach(func(innerStream interface{}) { innerStream.(*Stream).Pipe(newS) })
 		newS.Close()
 	}()
 	return newS
@@ -421,7 +441,7 @@ func (s *Stream) FlattenDeep() *Stream {
 		s.forEach(func(x interface{}) {
 			switch x.(type) {
 			case *Stream:
-				x.(*Stream).forEach(func(y interface{}) { s.PushBack(y) })
+				x.(*Stream).FlattenDeep().ForEach(func(y interface{}) { newS.PushBack(y) })
 			default:
 				newS.PushBack(x)
 			}
@@ -451,7 +471,11 @@ func (s *Stream) TakeWhile(f func(x interface{}) bool) *Stream {
 }
 
 func (s *Stream) Pipe(other *Stream) *Stream {
-	return Pipeline(s, other)
+	go func() {
+		s.forEach(func(x interface{}) { other.PushBack(x) })
+		other.Close()
+	}()
+	return other
 }
 
 func (s *Stream) Closed() bool { return s.PeekFront() == EndMarker }
@@ -459,9 +483,8 @@ func (s *Stream) Closed() bool { return s.PeekFront() == EndMarker }
 func (s *Stream) Take(n uint) *Stream {
 	newS := New()
 	go func() {
-		var x interface{}
 		for i := uint(0); i < n; i++ {
-			x = s.Pull()
+			x := s.Pull()
 			if x == EndMarker {
 				break
 			}
@@ -479,9 +502,8 @@ func (s *Stream) Skip() *Stream {
 func (s *Stream) SkipN(n uint) *Stream {
 	newS := New()
 	go func() {
-		s.Take(n).PullAll()
-		s.forEach(func(x interface{}) { newS.PushBack(x) })
-		newS.Close()
+		s.Take(n).PullN(n)
+		s.Pipe(newS)
 	}()
 	return newS
 }
@@ -493,7 +515,7 @@ func (s *Stream) Reduce(init interface{}, f func(acc interface{}, x interface{})
 
 func (s *Stream) Scan(init interface{}, f func(x interface{}, y interface{}) interface{}) *Stream {
 	return s.Map(func(x interface{}) interface{} {
-		init = f(init, x)
+		defer func() { init = f(init, x) }()
 		return init
 	})
 }
@@ -560,6 +582,20 @@ func (s *Stream) Eq(x interface{}) bool {
 		return s == x.(*Stream)
 	default:
 		return false
+	}
+}
+
+func (s *Stream) Clone() *Stream {
+	s.lksLk.Lock()
+	s.bufLk.Lock()
+	defer s.lksLk.Unlock()
+	defer s.bufLk.Unlock()
+	return &Stream{
+		closed: s.closed,
+		bufLk:  &sync.Mutex{},
+		lksLk:  &sync.Mutex{},
+		buf:    s.buf.Clone(),
+		lks:    s.lks.Clone(),
 	}
 }
 

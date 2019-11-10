@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/nl253/Concurrency/job"
+	"github.com/nl253/DataStructures"
 )
 
 type (
@@ -43,6 +44,14 @@ func Generate(n int, m int, f func(int) interface{}) *ConcurrentList {
 	xs := New()
 	for i := n; i < m; i++ {
 		xs.PushBack(f(i))
+	}
+	return xs
+}
+
+func Nats(n uint) *ConcurrentList {
+	xs := New()
+	for i := uint(0); i < n; i++ {
+		xs.PushBack(i)
 	}
 	return xs
 }
@@ -395,6 +404,29 @@ func (xs *ConcurrentList) Any(pred func(z interface{}) bool) bool {
 	}).(bool)
 }
 
+func (xs *ConcurrentList) Flatten() *ConcurrentList {
+	return xs.Reduce(New(), func(x interface{}, y interface{}, _ uint) interface{} {
+		acc := x.(*ConcurrentList)
+		acc.PushBack(y)
+		return acc
+	}).(*ConcurrentList)
+}
+
+func (xs *ConcurrentList) FlattenDeep() *ConcurrentList {
+	return xs.Reduce(New(), func(x interface{}, y interface{}, _ uint) interface{} {
+		acc := x.(*ConcurrentList)
+		switch y.(type) {
+		case *ConcurrentList:
+			y.(*ConcurrentList).FlattenDeep().ForEach(func(el interface{}, _ uint) {
+				acc.PushBack(el)
+			})
+		default:
+			acc.PushBack(y)
+		}
+		return acc
+	}).(*ConcurrentList)
+}
+
 func (xs *ConcurrentList) Join(delim string) string {
 	s := xs.ToSlice()
 	n := len(s)
@@ -485,9 +517,16 @@ func (xs *ConcurrentList) Eq(_ys interface{}) bool {
 }
 
 func (xs *ConcurrentList) Clone() *ConcurrentList {
-	return xs.Map(func(i interface{}, _ uint) interface{} {
-		return i
+	newXS := New()
+	xs.ForEach(func(x interface{}, _ uint) {
+		switch x.(type) {
+		case *DataStructures.ICloneable:
+			newXS.PushBack((*x.(*DataStructures.ICloneable)).Clone())
+		default:
+			newXS.PushBack(x)
+		}
 	})
+	return newXS
 }
 
 func (xs *ConcurrentList) String() string {

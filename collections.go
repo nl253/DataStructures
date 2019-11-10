@@ -6,11 +6,19 @@ import (
 	"time"
 )
 
+type ICloneable interface {
+	Clone() *IObject
+}
+
+type IEq interface {
+	Eq() bool
+}
+
 type IObject interface {
 	fmt.Stringer
+	ICloneable
+	IEq
 	New() *IObject
-	Clone() *IObject
-	Eq(interface{}) bool
 }
 
 type IContainer interface {

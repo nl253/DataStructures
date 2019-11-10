@@ -3,6 +3,7 @@ package stream
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 	"testing"
 	"time"
 
@@ -239,5 +240,32 @@ func TestStream_FromStr(t *testing.T) {
 	})
 	should("generate valid stream", true, func() interface{} {
 		return isValid(FromStr("abc")) && isValid(FromStr(""))
+	})
+}
+
+func TestStream_FromFile(t *testing.T) {
+	should := fStream("FromFile", t)
+	ff := func() *Stream {
+		return FromFile("/home/mx/go/src/github.com/nl253/DataStructures/stream/stream_test.go")
+	}
+	should("make stream of bytes", true, func() interface{} {
+		return ff().PullAll().All(func(x interface{}) bool {
+			switch x.(type) {
+			case byte:
+				return true
+			default:
+				return false
+			}
+		})
+	})
+	should("generate valid stream", true, func() interface{} {
+		return isValid(ff())
+	})
+	should("generate valid stream", "package", func() interface{} {
+		sb := strings.Builder{}
+		ff().Take(7).Println().PullAll().ForEach(func(x interface{}, u uint) {
+			sb.WriteByte(x.(byte))
+		})
+		return sb.String()
 	})
 }
