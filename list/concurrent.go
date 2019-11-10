@@ -520,8 +520,8 @@ func (xs *ConcurrentList) Clone() *ConcurrentList {
 	newXS := New()
 	xs.ForEach(func(x interface{}, _ uint) {
 		switch x.(type) {
-		case *DataStructures.ICloneable:
-			newXS.PushBack((*x.(*DataStructures.ICloneable)).Clone())
+		case *DataStructures.Cloneable:
+			newXS.PushBack((*x.(*DataStructures.Cloneable)).Clone())
 		default:
 			newXS.PushBack(x)
 		}

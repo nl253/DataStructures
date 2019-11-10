@@ -344,6 +344,10 @@ func (s *Stream) ForEach(f func(x interface{})) *Stream {
 	})
 }
 
+func (s *Stream) Wait() {
+	s.forEach(func(x interface{}) {})
+}
+
 func (s *Stream) Log(writer io.Writer, format string) *Stream {
 	return s.ForEach(func(x interface{}) {
 		if _, err := fmt.Fprintf(writer, format, x); err != nil {
