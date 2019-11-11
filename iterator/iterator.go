@@ -5,6 +5,7 @@ import (
 	"io"
 	"math/rand"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/nl253/DataStructures/list"
@@ -24,9 +25,10 @@ func New(initState interface{}, f func(interface{}) interface{}) *Iterator {
 	return &Iterator{
 		lk: &sync.Mutex{},
 		f: func(state interface{}) interface{} {
-			if state == EndOfIteration {
+			switch state {
+			case EndOfIteration:
 				return state
-			} else {
+			default:
 				return f(state)
 			}
 		},
@@ -41,15 +43,7 @@ func FromFile(filePath string) *Iterator {
 	}
 	buf := make([]byte, 1, 1)
 	off := int64(0)
-	_, err := file.ReadAt(buf, off)
-	if err == io.EOF {
-		return Repeat(EndOfIteration)
-	}
-	if err != nil {
-		panic(fmt.Sprintf("[ERROR] failed to read file %s at offset %d - %s", filePath, off, err.Error()))
-	}
-	off++
-	return New(buf[0], func(_ interface{}) interface{} {
+	return New(nil, func(_ interface{}) interface{} {
 		_, err := file.ReadAt(buf, off)
 		if err == io.EOF {
 			return EndOfIteration
@@ -62,17 +56,39 @@ func FromFile(filePath string) *Iterator {
 	})
 }
 
-// func FromFileSplit(filePath string, delim byte) *Iterator {
-//     it := FromFile(filePath)
-// }
+func FromFileSplit(filePath string, delim byte) *Iterator {
+	file, e := os.Open(filePath)
+	if e != nil {
+		panic(fmt.Sprintf("[ERROR] failed to open file - %s", e.Error()))
+	}
+	buf := make([]byte, 1, 1)
+	off := int64(0)
+	return New(nil, func(_ interface{}) interface{} {
+		sb := strings.Builder{}
+		for {
+			_, err := file.ReadAt(buf, off)
+			if err == io.EOF {
+				return sb.String()
+			}
+			if err != nil {
+				panic(fmt.Sprintf("[ERROR] failed to read file %s at offset %d - %s", filePath, off, err.Error()))
+			}
+			off++
+			if buf[0] == delim {
+				return sb.String()
+			}
+			sb.WriteByte(buf[0])
+		}
+	})
+}
 
-// func FromFileLines(filePath string) *Iterator {
-// 	return FileSplit(filePath, '\n')
-// }
+func FromFileLines(filePath string) *Iterator {
+	return FromFileSplit(filePath, '\n')
+}
 
 func FromStr(s string) *Iterator {
-	i := 1
-	return New(s[0], func(_ interface{}) interface{} {
+	i := 0
+	return New(nil, func(_ interface{}) interface{} {
 		if i < len(s) {
 			tmp := s[i]
 			i++
@@ -83,11 +99,13 @@ func FromStr(s string) *Iterator {
 }
 
 func Range(initState int, step int) *Iterator {
-	return New(initState, func(i interface{}) interface{} { return i.(int) + step })
+	return New(initState-step, func(i interface{}) interface{} { return i.(int) + step })
 }
 
 func Nats() *Iterator {
-	return New(0, func(i interface{}) interface{} { return i.(int) + 1 })
+	return New(uint(0), func(i interface{}) interface{} { return i.(uint) + 1 }).Map(func(n interface{}) interface{} {
+		return n.(uint) - 1
+	})
 }
 
 func Ints() *Iterator {
@@ -95,15 +113,15 @@ func Ints() *Iterator {
 }
 
 func FromClojure(f func() interface{}) *Iterator {
-	return New(f(), func(_ interface{}) interface{} { return rand.Float64() })
+	return New(nil, func(_ interface{}) interface{} { return f() })
 }
 
 func RandF64s() *Iterator {
-	return New(rand.Float64(), func(_ interface{}) interface{} { return rand.Float64() })
+	return FromClojure(func() interface{} { return rand.Float64() })
 }
 
 func RandF32s() *Iterator {
-	return New(rand.Float32(), func(_ interface{}) interface{} { return rand.Float32() })
+	return FromClojure(func() interface{} { return rand.Float32() })
 }
 
 func Repeat(x interface{}) *Iterator {
@@ -113,11 +131,8 @@ func Repeat(x interface{}) *Iterator {
 func (iter *Iterator) Take(n uint) *Iterator {
 	iter.lk.Lock()
 	defer iter.lk.Unlock()
-	if n == 0 {
-		return Repeat(EndOfIteration)
-	}
-	return New(iter.pull(), func(state interface{}) interface{} {
-		if n <= 1 {
+	return New(iter.state, func(state interface{}) interface{} {
+		if n == 0 {
 			return EndOfIteration
 		} else {
 			n--
@@ -154,16 +169,8 @@ func (iter *Iterator) Pull() interface{} {
 	return iter.pull()
 }
 
-func (iter *Iterator) tryAdvance() bool {
-	ok := iter.state != EndOfIteration
-	if ok {
-		iter.state = iter.f(iter.state)
-	}
-	return ok
-}
-
 func (iter *Iterator) pull() interface{} {
-	defer iter.tryAdvance()
+	iter.state = iter.f(iter.state)
 	return iter.state
 }
 
@@ -210,10 +217,8 @@ func (iter *Iterator) SkipN(n uint) *Iterator {
 }
 
 func (iter *Iterator) skipN(n uint) *Iterator {
-	for i := uint(0); i < n; i++ {
-		if !iter.tryAdvance() {
-			return iter
-		}
+	for i := uint(0); i < n && iter.state != EndOfIteration; i++ {
+		iter.state = iter.f(iter.state)
 	}
 	return iter
 }
@@ -221,7 +226,7 @@ func (iter *Iterator) skipN(n uint) *Iterator {
 func (iter *Iterator) Map(f func(interface{}) interface{}) *Iterator {
 	iter.lk.Lock()
 	defer iter.lk.Unlock()
-	return New(f(iter.pull()), func(state interface{}) interface{} { return f(iter.Pull()) })
+	return New(iter.state, func(state interface{}) interface{} { return f(iter.Pull()) })
 }
 
 func (iter *Iterator) Log(writer io.Writer, format string) *Iterator {
@@ -257,38 +262,39 @@ func (iter *Iterator) Filter(f func(interface{}) bool) *Iterator {
 	defer iter.lk.Unlock()
 	return New(iter.state, func(state interface{}) interface{} {
 		focus := state
-		for !f(focus) {
+		for !f(focus) && focus != EndOfIteration {
 			focus = iter.Pull()
 		}
 		return focus
 	})
 }
 
-func (iter *Iterator) ReduceN(n uint, f func(interface{}, interface{}) interface{}) interface{} {
+func (iter *Iterator) ReduceN(init interface{}, f func(interface{}, interface{}) interface{}, n uint) interface{} {
 	iter.lk.Lock()
 	defer iter.lk.Unlock()
-	acc := iter.pull()
-	for i := uint(1); i < n; i++ {
-		acc = f(acc, iter.pull())
+	acc := init
+	var x interface{}
+	for i := uint(0); i < n; i++ {
+		if x = iter.pull(); x == EndOfIteration {
+			break
+		}
+		acc = f(acc, x)
 	}
 	return acc
 }
 
-func (iter *Iterator) ReduceAll(f func(interface{}, interface{}) interface{}) interface{} {
+func (iter *Iterator) ReduceAll(init interface{}, f func(interface{}, interface{}) interface{}) interface{} {
 	iter.lk.Lock()
 	defer iter.lk.Unlock()
-	acc := iter.pull()
-	for {
-		if x := iter.pull(); x != EndOfIteration {
-			acc = f(acc, x)
-		} else {
-			return acc
-		}
+	acc := init
+	for x := iter.pull(); x != EndOfIteration; x = iter.pull() {
+		acc = f(acc, x)
 	}
+	return acc
 }
 
 func (iter *Iterator) Sum() int {
-	return iter.ReduceAll(func(x interface{}, y interface{}) interface{} { return x.(int) + y.(int) }).(int)
+	return iter.ReduceAll(0, func(x interface{}, y interface{}) interface{} { return x.(int) + y.(int) }).(int)
 }
 
 func (iter *Iterator) Count() int {

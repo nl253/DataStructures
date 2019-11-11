@@ -440,13 +440,13 @@ func (xs *ConcurrentList) Join(delim string) string {
 func (xs *ConcurrentList) ToSlice() []interface{} {
 	var idx uint = 0
 	xs.lk.RLock()
+	defer xs.lk.RUnlock()
 	n := xs.size
 	parts := make([]interface{}, n, n)
 	for focus := xs.fst; focus != nil; focus = focus.next {
 		parts[idx] = focus.val
 		idx++
 	}
-	xs.lk.RUnlock()
 	return parts
 }
 
